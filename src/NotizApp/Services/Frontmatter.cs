@@ -150,6 +150,8 @@ public static class Frontmatter
                         ink.Datei = z["datei:".Length..].Trim();
                     else if (!inText && z.StartsWith("bild:"))
                         ink.Bild = z["bild:".Length..].Trim() is { Length: > 0 } b ? b : null;
+                    else if (!inText && z.StartsWith("muster:"))
+                        ink.Muster = z["muster:".Length..].Trim() is { Length: > 0 } m ? m : null;
                     else if (!inText && z.StartsWith("hoehe:") &&
                              double.TryParse(z["hoehe:".Length..].Trim(), CultureInfo.InvariantCulture, out var h))
                         ink.Hoehe = h;
@@ -194,6 +196,8 @@ public static class Frontmatter
                     sb.Append($"datei: {i.Datei}\n");
                     if (!string.IsNullOrWhiteSpace(i.Bild))
                         sb.Append($"bild: {i.Bild}\n");
+                    if (!string.IsNullOrWhiteSpace(i.Muster))
+                        sb.Append($"muster: {i.Muster}\n");
                     sb.Append($"hoehe: {((int)i.Hoehe).ToString(CultureInfo.InvariantCulture)}\n");
                     if (!string.IsNullOrWhiteSpace(i.ErkannterText))
                         sb.Append($"text: {i.ErkannterText.Replace("\r\n", "\n").TrimEnd('\n')}\n");

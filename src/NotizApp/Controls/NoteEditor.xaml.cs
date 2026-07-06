@@ -28,6 +28,8 @@ public partial class NoteEditor : UserControl
     public event Action? NotizGeaendert;
     /// <summary>Speichern-Button gedrückt.</summary>
     public event Action? SpeichernAngefordert;
+    /// <summary>Fokus-Modus umgeschaltet (Host klappt die Seitenleisten ein/aus).</summary>
+    public event Action<bool>? FokusUmgeschaltet;
 
     Note? _note;
     bool _laden;          // Guard: Notiz wird gerade in die UI geladen
@@ -196,6 +198,15 @@ public partial class NoteEditor : UserControl
 
     void Speichern_Click(object sender, RoutedEventArgs e) => SpeichernAngefordert?.Invoke();
 
+    void Fokus_Umschalten(object sender, RoutedEventArgs e)
+    {
+        if (!_initialisiert) return;
+        FokusUmgeschaltet?.Invoke(FokusToggle.IsChecked == true);
+    }
+
+    /// <summary>Fokus-Zustand von außen setzen (F11 im Hauptfenster).</summary>
+    public void SetzeFokusToggle(bool an) => FokusToggle.IsChecked = an;
+
     // ---------- Werkzeuge ----------
 
     void Werkzeug_Checked(object sender, RoutedEventArgs e)
@@ -314,8 +325,19 @@ public partial class NoteEditor : UserControl
 
     void NeueTintenflaeche_Click(object sender, RoutedEventArgs e)
     {
+        // Linksklick öffnet das Papier-Menü (Blanko/Liniert/Kariert/Punktraster)
+        var menu = TintenflaecheButton.ContextMenu!;
+        menu.PlacementTarget = TintenflaecheButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    void NeueTintenflaecheMuster_Click(object sender, RoutedEventArgs e)
+    {
         if (_note is null) return;
+        var muster = (string)((MenuItem)sender).Tag;
         var ink = new InkBlockVm();
+        ink.SetzeMuster(muster.Length == 0 ? null : muster);
         RegistriereVm(ink);
         _bloecke.Add(ink);
         // Danach direkt weiterschreiben können: Text-Block ans Ende
@@ -323,6 +345,12 @@ public partial class NoteEditor : UserControl
         RegistriereVm(text);
         _bloecke.Add(text);
         MeldeAenderung();
+    }
+
+    void InkMuster_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is InkBlockVm ink)
+            ink.NaechstesMuster();
     }
 
     void InkLoeschen_Click(object sender, RoutedEventArgs e)

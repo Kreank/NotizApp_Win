@@ -103,6 +103,12 @@
         <Border Grid.Row="3" Margin="16,10,16,6" Padding="6,4" CornerRadius="6"
                 Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
             <WrapPanel VerticalAlignment="Center">
+                <ToggleButton x:Name="FokusToggle" Style="{StaticResource WerkzeugToggle}"
+                              Content="⛶" ToolTip="Fokus-Modus: Seitenleisten ein-/ausklappen (F11)"
+                              Checked="Fokus_Umschalten" Unchecked="Fokus_Umschalten"/>
+
+                <Separator Margin="6,2" Width="1"/>
+
                 <ToggleButton x:Name="StiftToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="🖊" ToolTip="Stift" IsChecked="True"
                               Checked="Werkzeug_Checked"/>
@@ -183,9 +189,19 @@
                               Content="✍→A Handschrift → Text"
                               ToolTip="Aktiv: Geschriebenes wird zu Tipptext. Inaktiv: Tinte bleibt Tinte (wird für die Suche trotzdem im Hintergrund erkannt)."/>
 
-                <Button Style="{StaticResource WerkzeugButton}" Content="+ Tintenfläche"
+                <Button x:Name="TintenflaecheButton" Style="{StaticResource WerkzeugButton}"
+                        Content="+ Tintenfläche"
                         ToolTip="Neue Handschrift-/Skizzenfläche am Ende einfügen"
-                        Click="NeueTintenflaeche_Click"/>
+                        Click="NeueTintenflaeche_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Blanko" Tag="" Click="NeueTintenflaecheMuster_Click"/>
+                            <MenuItem Header="Liniert" Tag="linien" Click="NeueTintenflaecheMuster_Click"/>
+                            <MenuItem Header="Kariert" Tag="karo" Click="NeueTintenflaecheMuster_Click"/>
+                            <MenuItem Header="Punktraster" Tag="punkte" Click="NeueTintenflaecheMuster_Click"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
 
                 <Button Style="{StaticResource WerkzeugButton}" Content="+ Bild"
                         ToolTip="Bild einfügen (zum Draufzeichnen)"
@@ -244,6 +260,10 @@
                                             ToolTip="Tintenfläche löschen"
                                             BorderThickness="0" Background="Transparent"
                                             Padding="8,2" Click="InkLoeschen_Click"/>
+                                    <Button DockPanel.Dock="Right" Content="▦"
+                                            ToolTip="Papier wechseln: Blanko → Liniert → Kariert → Punktraster"
+                                            BorderThickness="0" Background="Transparent"
+                                            Padding="8,2" Click="InkMuster_Click"/>
                                     <Thumb DockPanel.Dock="Right" Width="60" Height="14"
                                            Cursor="SizeNS" ToolTip="Höhe ziehen"
                                            DragDelta="InkResize_DragDelta">

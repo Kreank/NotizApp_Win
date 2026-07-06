@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     public ICommand SpeichernCommand { get; }
     public ICommand SuchenCommand { get; }
     public ICommand NeuLadenCommand { get; }
+    public ICommand FokusCommand { get; }
 
     public MainWindow(NoteStore store, SettingsService settings, InkRecognitionService erkennung)
     {
@@ -39,6 +40,7 @@ public partial class MainWindow : Window
         SpeichernCommand = new RelayCommand(SpeichereAktuelle);
         SuchenCommand = new RelayCommand(() => { SuchBox.Focus(); SuchBox.SelectAll(); });
         NeuLadenCommand = new RelayCommand(NeuLaden);
+        FokusCommand = new RelayCommand(() => Editor.SetzeFokusToggle(!_fokusAktiv));
 
         InitializeComponent();
         _initialisiert = true;
@@ -47,6 +49,7 @@ public partial class MainWindow : Window
         Editor.Ki = new KiService();
         Editor.NotizGeaendert += Editor_NotizGeaendert;
         Editor.SpeichernAngefordert += SpeichereAktuelle;
+        Editor.FokusUmgeschaltet += SetzeFokusModus;
 
         _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _autosaveTimer.Tick += (_, _) => { _autosaveTimer.Stop(); SpeichereAktuelle(); };
@@ -375,6 +378,45 @@ public partial class MainWindow : Window
             OeffneNotiz(wieder);
         }
         ZeigeEditorHinweis();
+    }
+
+    // ---------- Fokus-Modus (Seitenleisten einklappen) ----------
+
+    bool _fokusAktiv;
+    GridLength _sidebarBreite = new(230);
+    GridLength _listeBreite = new(330);
+    double _sidebarMin = 170, _listeMin = 240;
+
+    void SetzeFokusModus(bool an)
+    {
+        if (an == _fokusAktiv) return;
+        _fokusAktiv = an;
+        if (an)
+        {
+            _sidebarBreite = SidebarSpalte.Width;
+            _listeBreite = ListeSpalte.Width;
+            _sidebarMin = SidebarSpalte.MinWidth;
+            _listeMin = ListeSpalte.MinWidth;
+            SidebarSpalte.MinWidth = 0;
+            ListeSpalte.MinWidth = 0;
+            SidebarSpalte.Width = new GridLength(0);
+            ListeSpalte.Width = new GridLength(0);
+            SidebarPanel.Visibility = Visibility.Collapsed;
+            ListePanel.Visibility = Visibility.Collapsed;
+            SplitterLinks.Visibility = Visibility.Collapsed;
+            SplitterRechts.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            SidebarSpalte.MinWidth = _sidebarMin;
+            ListeSpalte.MinWidth = _listeMin;
+            SidebarSpalte.Width = _sidebarBreite;
+            ListeSpalte.Width = _listeBreite;
+            SidebarPanel.Visibility = Visibility.Visible;
+            ListePanel.Visibility = Visibility.Visible;
+            SplitterLinks.Visibility = Visibility.Visible;
+            SplitterRechts.Visibility = Visibility.Visible;
+        }
     }
 
     /// <summary>Fenster aus dem Tray heraus anzeigen.</summary>

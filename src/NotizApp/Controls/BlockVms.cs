@@ -53,11 +53,70 @@ public class InkBlockVm : BlockVm
     public string ErkannterText { get; set; } = "";
 
     Brush _hintergrund = Brushes.Transparent;
-    /// <summary>ImageBrush des Hintergrundbilds fürs InkCanvas (Transparent ohne Bild).</summary>
+    /// <summary>Hintergrund fürs InkCanvas: Bild, Papier-Muster oder Transparent.</summary>
     public Brush Hintergrund
     {
         get => _hintergrund;
         private set { _hintergrund = value; OnChanged(); }
+    }
+
+    /// <summary>Papier-Muster: null (blanko), "linien", "karo", "punkte".</summary>
+    public string? Muster { get; private set; }
+
+    static readonly string?[] MusterFolge = { null, "linien", "karo", "punkte" };
+
+    public void SetzeMuster(string? muster)
+    {
+        Muster = muster;
+        if (Bild is null) // Bild hat Vorrang vor Muster
+            Hintergrund = MusterBrush(muster);
+        MeldeGeaendert();
+    }
+
+    /// <summary>Muster durchschalten: blanko → liniert → kariert → punkte → blanko.</summary>
+    public void NaechstesMuster()
+    {
+        var i = Array.IndexOf(MusterFolge, Muster);
+        SetzeMuster(MusterFolge[(i + 1) % MusterFolge.Length]);
+    }
+
+    /// <summary>Kachel-Brush für ein Papier-Muster (dezentes Grau, funktioniert hell wie dunkel).</summary>
+    public static Brush MusterBrush(string? muster)
+    {
+        if (muster is null) return Brushes.Transparent;
+        const double kachel = 26;
+        var stift = new Pen(new SolidColorBrush(Color.FromArgb(70, 128, 128, 128)), 1);
+        var gruppe = new DrawingGroup();
+        // Unsichtbare Füllung, damit die Kachelgröße stimmt
+        gruppe.Children.Add(new GeometryDrawing(Brushes.Transparent, null,
+            new RectangleGeometry(new Rect(0, 0, kachel, kachel))));
+        switch (muster)
+        {
+            case "linien":
+                gruppe.Children.Add(new GeometryDrawing(null, stift,
+                    new LineGeometry(new Point(0, kachel), new Point(kachel, kachel))));
+                break;
+            case "karo":
+                gruppe.Children.Add(new GeometryDrawing(null, stift,
+                    new LineGeometry(new Point(0, kachel), new Point(kachel, kachel))));
+                gruppe.Children.Add(new GeometryDrawing(null, stift,
+                    new LineGeometry(new Point(kachel, 0), new Point(kachel, kachel))));
+                break;
+            case "punkte":
+                gruppe.Children.Add(new GeometryDrawing(
+                    new SolidColorBrush(Color.FromArgb(110, 128, 128, 128)), null,
+                    new EllipseGeometry(new Point(kachel / 2, kachel / 2), 1.2, 1.2)));
+                break;
+            default:
+                return Brushes.Transparent;
+        }
+        gruppe.Freeze();
+        return new DrawingBrush(gruppe)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, kachel, kachel),
+            ViewportUnits = BrushMappingMode.Absolute,
+        };
     }
 
     /// <summary>Hintergrundbild aus Datei laden (ohne Datei-Lock) und Höhe ans Seitenverhältnis anpassen.</summary>
@@ -122,8 +181,11 @@ public class InkBlockVm : BlockVm
     {
         Datei = c.Datei;
         Bild = c.Bild;
+        Muster = c.Muster;
         ErkannterText = c.ErkannterText;
         _hoehe = Math.Clamp(c.Hoehe, MinHoehe, MaxHoehe);
+        if (Bild is null)
+            _hintergrund = MusterBrush(Muster);
     }
 
     /// <summary>Feuert bei jeder Strich-Änderung — der Editor hängt hier die Erkennung dran.</summary>
@@ -133,6 +195,7 @@ public class InkBlockVm : BlockVm
     {
         Datei = Datei,
         Bild = Bild,
+        Muster = Muster,
         ErkannterText = ErkannterText,
         Hoehe = Hoehe,
         Strokes = Strokes,

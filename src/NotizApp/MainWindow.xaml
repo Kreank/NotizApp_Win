@@ -12,19 +12,20 @@
         <KeyBinding Modifiers="Control" Key="S" Command="{Binding SpeichernCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
         <KeyBinding Modifiers="Control" Key="F" Command="{Binding SuchenCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
         <KeyBinding Key="F5" Command="{Binding NeuLadenCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="F11" Command="{Binding FokusCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
     </Window.InputBindings>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="230" MinWidth="170"/>
+            <ColumnDefinition x:Name="SidebarSpalte" Width="230" MinWidth="170"/>
             <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="330" MinWidth="240"/>
+            <ColumnDefinition x:Name="ListeSpalte" Width="330" MinWidth="240"/>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*" MinWidth="360"/>
         </Grid.ColumnDefinitions>
 
         <!-- ===== Sidebar ===== -->
-        <DockPanel Grid.Column="0" Margin="10,10,4,10">
+        <DockPanel x:Name="SidebarPanel" Grid.Column="0" Margin="10,10,4,10">
             <Button x:Name="NeueNotizButton" DockPanel.Dock="Top"
                     Content="＋ Neue Notiz" FontWeight="SemiBold"
                     HorizontalAlignment="Stretch" Padding="0,8"
@@ -61,11 +62,11 @@
                      SelectionChanged="TagListe_SelectionChanged"/>
         </DockPanel>
 
-        <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center"
+        <GridSplitter x:Name="SplitterLinks" Grid.Column="1" Width="4" HorizontalAlignment="Center"
                       VerticalAlignment="Stretch" Background="Transparent"/>
 
         <!-- ===== Mittlere Spalte: Suche + Notizliste / Aufgabenliste ===== -->
-        <DockPanel Grid.Column="2" Margin="4,10,4,10">
+        <DockPanel x:Name="ListePanel" Grid.Column="2" Margin="4,10,4,10">
             <TextBox x:Name="SuchBox" DockPanel.Dock="Top" Margin="0,0,0,8"
                      Padding="6,5" FontSize="13"
                      TextChanged="SuchBox_TextChanged"
@@ -140,7 +141,7 @@
             </Grid>
         </DockPanel>
 
-        <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Center"
+        <GridSplitter x:Name="SplitterRechts" Grid.Column="3" Width="4" HorizontalAlignment="Center"
                       VerticalAlignment="Stretch" Background="Transparent"/>
 
         <!-- ===== Editor ===== -->
