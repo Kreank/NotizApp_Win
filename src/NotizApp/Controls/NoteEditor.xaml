@@ -159,6 +159,10 @@
                         ToolTip="Neue Handschrift-/Skizzenfläche am Ende einfügen"
                         Click="NeueTintenflaeche_Click"/>
 
+                <Button Style="{StaticResource WerkzeugButton}" Content="+ Bild"
+                        ToolTip="Bild einfügen (zum Draufzeichnen)"
+                        Click="BildEinfuegen_Click"/>
+
                 <Button x:Name="KiButton" Style="{StaticResource WerkzeugButton}" Content="✨ KI"
                         ToolTip="KI-Aufbereitung (sendet nur den Notiztext, keine Kundendaten)"
                         Click="Ki_Click">
@@ -167,6 +171,8 @@
                             <MenuItem Header="📋 Zusammenfassen" Tag="Zusammenfassen" Click="KiAktion_Click"/>
                             <MenuItem Header="✏ Text aufbereiten" Tag="Aufbereiten" Click="KiAktion_Click"/>
                             <MenuItem Header="☑ Aufgaben extrahieren" Tag="Aufgaben" Click="KiAktion_Click"/>
+                            <Separator/>
+                            <MenuItem Header="📄 Dateien erstellen/suchen…" Click="KiDokument_Click"/>
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
@@ -198,7 +204,8 @@
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <InkCanvas Grid.Row="0" Background="Transparent"
+                                <InkCanvas Grid.Row="0"
+                                           Background="{Binding Hintergrund}"
                                            Strokes="{Binding Strokes}"
                                            Height="{Binding Hoehe}"
                                            Loaded="InkCanvas_Loaded"

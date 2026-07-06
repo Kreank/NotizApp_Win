@@ -6,7 +6,13 @@
 # "notizapp-claude-config" (gemountet auf /home/claude).
 FROM node:22-slim
 
-RUN npm install -g @anthropic-ai/claude-code \
+# pandoc + weasyprint: Markdown/HTML -> PDF fuer die Dokument-Erzeugung
+# curl: Bilder/Dateien aus dem Netz laden (Auftrag "such mir Bilder zu ...")
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       pandoc weasyprint fonts-dejavu curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code \
     && useradd -m -s /bin/bash claude
 
 USER claude

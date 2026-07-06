@@ -42,6 +42,8 @@ public class InkBlockContent : NoteBlock
 {
     /// <summary>Dateiname des ISF-Sidecars, z.B. "20260706-094100-anruf.t1.isf".</summary>
     public string Datei { get; set; } = "";
+    /// <summary>Optionales Hintergrundbild (Dateiname neben der .md) — zum Draufzeichnen.</summary>
+    public string? Bild { get; set; }
     public string ErkannterText { get; set; } = "";
     public double Hoehe { get; set; } = 320;
     /// <summary>Lazy geladen; null solange die ISF-Datei noch nicht gelesen wurde.</summary>

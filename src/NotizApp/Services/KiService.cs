@@ -190,6 +190,54 @@ public class KiService
         return antwort;
     }
 
+    /// <summary>
+    /// Freier Auftrag ("Erstelle ein Kundenschreiben als PDF", "Such Bilder zu …"):
+    /// Claude arbeitet mit Schreibrechten und Internet in einem leeren
+    /// Austauschordner, der als /ausgabe gemountet wird. Der Notizen-Ordner
+    /// bleibt unerreichbar. Liefert die erzeugten Dateipfade.
+    /// </summary>
+    public async Task<List<string>> ErzeugeDokumentAsync(
+        string auftrag, string body, string ausgabeOrdner, CancellationToken ct)
+    {
+        Directory.CreateDirectory(ausgabeOrdner);
+
+        var envDatei = Path.Combine(SettingsService.SettingsOrdner, "claude.env");
+        var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
+
+        const string system =
+            "Du arbeitest für einen SHK-Handwerksbetrieb (Sanitär/Heizung/Klima) und erstellst " +
+            "Dateien im Ordner /ausgabe — NUR dort. " +
+            "Für PDFs: Markdown/HTML schreiben und konvertieren mit " +
+            "'pandoc eingabe.md -o name.pdf --pdf-engine=weasyprint'. " +
+            "Bilder aus dem Netz lädst du mit curl (nur von seriösen Quellen, sinnvolle Dateinamen, " +
+            "Formate jpg/png). Sprache Deutsch, sachlich. Erfinde keine Fakten — nutze nur, was in " +
+            "der Notiz steht. Lösche Zwischendateien am Ende, sodass in /ausgabe nur die fertigen " +
+            "Dateien liegen. Gib zum Schluss nur die erstellten Dateinamen aus.";
+
+        var args = $"run --rm -i {envTeil}" +
+                   $"-v {PsQuote(ausgabeOrdner + ":/ausgabe")} " +
+                   $"-v {ConfigVolume}:/home/claude {Image} " +
+                   $"-p --system-prompt {PsQuote(system)} " +
+                   "--dangerously-skip-permissions --output-format text";
+        var stdin = $"Auftrag: {auftrag}\n\nNotiz:\n{body}";
+
+        var (code, stdout, stderr) = await StarteAsync("docker", args, stdin, ct,
+            TimeSpan.FromMinutes(8));
+        var dateien = Directory.Exists(ausgabeOrdner)
+            ? Directory.EnumerateFiles(ausgabeOrdner).OrderBy(f => f).ToList()
+            : new List<string>();
+
+        if (dateien.Count == 0)
+        {
+            var fehler = (stderr.Trim().Length > 0 ? stderr : stdout).Trim();
+            if (fehler.Length > 400) fehler = fehler[..400] + "…";
+            throw new InvalidOperationException(code != 0
+                ? $"Claude-Aufruf fehlgeschlagen:\n{fehler}"
+                : $"Claude hat keine Dateien erstellt.\n\nAntwort:\n{fehler}");
+        }
+        return dateien;
+    }
+
     /// <summary>Argument für die Windows-Kommandozeile quoten (Backslash-Escaping für ").</summary>
     static string PsQuote(string s) =>
         "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";

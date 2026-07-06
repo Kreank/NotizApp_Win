@@ -205,14 +205,19 @@ public class NoteStore
         return note;
     }
 
+    /// <summary>Alle Sidecar-Dateien der Notiz (ISF, Bilder, Anhänge): "&lt;mdname&gt;.*" außer der .md selbst.</summary>
+    static IEnumerable<string> Sidecars(string ordner, string mdName) =>
+        Directory.EnumerateFiles(ordner, $"{mdName}.*")
+            .Where(f => !f.EndsWith(".md", StringComparison.OrdinalIgnoreCase));
+
     public void Loesche(Note note)
     {
         var ordner = Path.GetDirectoryName(note.Pfad)!;
         var mdName = Path.GetFileNameWithoutExtension(note.Pfad);
         try { File.Delete(note.Pfad); } catch { }
-        foreach (var isf in Directory.EnumerateFiles(ordner, $"{mdName}.t*.isf"))
+        foreach (var sidecar in Sidecars(ordner, mdName).ToList())
         {
-            try { File.Delete(isf); } catch { }
+            try { File.Delete(sidecar); } catch { }
         }
         Notizen.Remove(note);
     }
@@ -232,18 +237,28 @@ public class NoteStore
 
         File.Move(note.Pfad, zielMd);
         var zielBasis = Path.GetFileNameWithoutExtension(zielMd);
-        foreach (var ink in note.Bloecke.OfType<InkBlockContent>())
+
+        // Alle Sidecars mitnehmen (Präfix ggf. auf neuen Basisnamen umstellen)
+        foreach (var sidecar in Sidecars(altOrdner, mdName).ToList())
         {
-            if (ink.Datei.Length == 0) continue;
-            var altIsf = Path.Combine(altOrdner, ink.Datei);
-            var neuName = ink.Datei.Replace(mdName, zielBasis);
-            if (File.Exists(altIsf))
-                File.Move(altIsf, Path.Combine(zielOrdner, neuName));
-            ink.Datei = neuName;
+            var neuName = Path.GetFileName(sidecar)
+                .Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
+            try { File.Move(sidecar, Path.Combine(zielOrdner, neuName)); } catch { }
+        }
+        if (zielBasis != mdName)
+        {
+            // Referenzen in den Blöcken (ISF-/Bild-Namen, Anhang-Links) anpassen
+            foreach (var ink in note.Bloecke.OfType<InkBlockContent>())
+            {
+                ink.Datei = ink.Datei.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
+                ink.Bild = ink.Bild?.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
+            }
+            foreach (var text in note.Bloecke.OfType<TextBlockContent>())
+                text.Text = text.Text.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
         }
         note.Pfad = zielMd;
         note.Notizbuch = zielNotizbuch;
-        // Frontmatter/Body mit neuen ISF-Namen neu schreiben
+        // Frontmatter/Body mit neuen Dateinamen neu schreiben
         File.WriteAllText(note.Pfad, Frontmatter.Schreibe(note.Meta, note.Bloecke));
         note.MeldeAnzeigeGeaendert();
     }

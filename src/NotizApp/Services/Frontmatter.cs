@@ -148,6 +148,8 @@ public static class Frontmatter
                     var z = zeilen[i];
                     if (!inText && z.StartsWith("datei:"))
                         ink.Datei = z["datei:".Length..].Trim();
+                    else if (!inText && z.StartsWith("bild:"))
+                        ink.Bild = z["bild:".Length..].Trim() is { Length: > 0 } b ? b : null;
                     else if (!inText && z.StartsWith("hoehe:") &&
                              double.TryParse(z["hoehe:".Length..].Trim(), CultureInfo.InvariantCulture, out var h))
                         ink.Hoehe = h;
@@ -190,6 +192,8 @@ public static class Frontmatter
                 case InkBlockContent i:
                     sb.Append("```ink\n");
                     sb.Append($"datei: {i.Datei}\n");
+                    if (!string.IsNullOrWhiteSpace(i.Bild))
+                        sb.Append($"bild: {i.Bild}\n");
                     sb.Append($"hoehe: {((int)i.Hoehe).ToString(CultureInfo.InvariantCulture)}\n");
                     if (!string.IsNullOrWhiteSpace(i.ErkannterText))
                         sb.Append($"text: {i.ErkannterText.Replace("\r\n", "\n").TrimEnd('\n')}\n");

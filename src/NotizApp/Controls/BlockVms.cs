@@ -1,6 +1,9 @@
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Ink;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using NotizApp.Models;
 
 namespace NotizApp.Controls;
@@ -44,7 +47,42 @@ public class InkBlockVm : BlockVm
 
     public StrokeCollection Strokes { get; }
     public string Datei { get; set; } = "";
+    /// <summary>Dateiname des Hintergrundbilds (relativ zum Notiz-Ordner), null = reine Tinte.</summary>
+    public string? Bild { get; set; }
     public string ErkannterText { get; set; } = "";
+
+    Brush _hintergrund = Brushes.Transparent;
+    /// <summary>ImageBrush des Hintergrundbilds fürs InkCanvas (Transparent ohne Bild).</summary>
+    public Brush Hintergrund
+    {
+        get => _hintergrund;
+        private set { _hintergrund = value; OnChanged(); }
+    }
+
+    /// <summary>Hintergrundbild aus Datei laden (ohne Datei-Lock) und Höhe ans Seitenverhältnis anpassen.</summary>
+    public void LadeBild(string ordner, double breiteHint = 800)
+    {
+        if (string.IsNullOrWhiteSpace(Bild)) return;
+        try
+        {
+            var pfad = Path.Combine(ordner, Bild);
+            if (!File.Exists(pfad)) return;
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad; // Datei sofort wieder freigeben
+            bmp.UriSource = new Uri(pfad);
+            bmp.EndInit();
+            bmp.Freeze();
+            Hintergrund = new ImageBrush(bmp) { Stretch = Stretch.Uniform };
+            // Beim ersten Einfügen sinnvolle Höhe wählen
+            if (Math.Abs(_hoehe - 320) < 0.5 && bmp.PixelWidth > 0)
+                _hoehe = Math.Clamp(breiteHint * bmp.PixelHeight / bmp.PixelWidth, MinHoehe, 700);
+        }
+        catch
+        {
+            // defektes/fehlendes Bild → Fläche bleibt nutzbar, nur ohne Hintergrund
+        }
+    }
 
     double _hoehe = 320;
     public double Hoehe
@@ -75,6 +113,7 @@ public class InkBlockVm : BlockVm
     public InkBlockVm(InkBlockContent c) : this(c.Strokes ?? new StrokeCollection())
     {
         Datei = c.Datei;
+        Bild = c.Bild;
         ErkannterText = c.ErkannterText;
         _hoehe = Math.Clamp(c.Hoehe, MinHoehe, MaxHoehe);
     }
@@ -85,6 +124,7 @@ public class InkBlockVm : BlockVm
     public InkBlockContent ZuModel() => new()
     {
         Datei = Datei,
+        Bild = Bild,
         ErkannterText = ErkannterText,
         Hoehe = Hoehe,
         Strokes = Strokes,

@@ -5,7 +5,7 @@
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False">
     <StackPanel Margin="16">
-        <TextBlock x:Name="FrageText" Margin="0,0,0,8"/>
+        <TextBlock x:Name="FrageText" Margin="0,0,0,8" TextWrapping="Wrap"/>
         <TextBox x:Name="EingabeBox" Padding="4"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="Abbrechen" MinWidth="90" Margin="0,0,8,0" IsCancel="True"/>

@@ -113,6 +113,11 @@ Volltextsuche über:
   Aufgaben extrahieren
 - Ergebnis wird als Vorschlag angezeigt (editierbar) und erst nach
   Bestätigung übernommen
+- **Dateien erstellen/suchen** (✨ → „Dateien erstellen/suchen…"): freier
+  Auftrag; Claude arbeitet mit Schreibrechten + Internet in einem leeren
+  Austauschordner (`/ausgabe`-Mount, pandoc/weasyprint/curl im Image).
+  Übernahme nach Bestätigung: Bilder → zeichenbare Blöcke, andere Dateien
+  (PDF …) → Anhang neben der Notiz + Link im Text
 
 ## 9. Erscheinungsbild
 
@@ -134,4 +139,6 @@ Volltextsuche über:
 - Der gemischte Block-Editor (Text + Tinte) ist der aufwendigste Teil der App —
   V1 startet bewusst mit einem einfachen Blockmodell (Tintenblock = feste Fläche,
   erweiterbar), statt ein OneNote-Freiform-Canvas nachzubauen
-- Später denkbar: Screenshots einfügen und mit Stift markieren (Workflow "Skizzen")
+- ~~Später denkbar: Screenshots einfügen und mit Stift markieren~~ → umgesetzt:
+  „+ Bild"-Button und KI-gelieferte Bilder werden als Tintenfläche mit
+  Bild-Hintergrund eingefügt (Draufzeichnen inklusive)

@@ -95,6 +95,7 @@ public partial class NoteEditor : UserControl
             WaehleCombo(TypBox, note.Meta.Typ);
             KopfExpander.IsExpanded = !note.Meta.Kunde.IstLeer;
 
+            var notizOrdner = System.IO.Path.GetDirectoryName(note.Pfad)!;
             foreach (var block in note.Bloecke)
             {
                 BlockVm vm = block switch
@@ -103,6 +104,8 @@ public partial class NoteEditor : UserControl
                     InkBlockContent i => new InkBlockVm(i),
                     _ => throw new InvalidOperationException(),
                 };
+                if (vm is InkBlockVm ib && ib.Bild is not null)
+                    ib.LadeBild(notizOrdner);
                 RegistriereVm(vm);
                 _bloecke.Add(vm);
             }
@@ -326,6 +329,96 @@ public partial class NoteEditor : UserControl
             ink.Hoehe += e.VerticalChange;
     }
 
+    // ---------- Bilder / Anhänge ----------
+
+    /// <summary>Datei neben die Notiz kopieren (Namensschema <mdname>.<name>) und Zielnamen liefern.</summary>
+    string KopiereAnhang(string quelle)
+    {
+        var ordner = System.IO.Path.GetDirectoryName(_note!.Pfad)!;
+        var mdName = System.IO.Path.GetFileNameWithoutExtension(_note.Pfad);
+        var name = System.IO.Path.GetFileName(quelle);
+        var ziel = System.IO.Path.Combine(ordner, $"{mdName}.{name}");
+        int n = 2;
+        while (System.IO.File.Exists(ziel))
+            ziel = System.IO.Path.Combine(ordner, $"{mdName}.{n++}-{name}");
+        System.IO.File.Copy(quelle, ziel);
+        return System.IO.Path.GetFileName(ziel);
+    }
+
+    static readonly string[] BildEndungen = { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
+
+    static bool IstBild(string pfad) =>
+        BildEndungen.Contains(System.IO.Path.GetExtension(pfad).ToLowerInvariant());
+
+    /// <summary>Bild als zeichenbaren Block (InkCanvas mit Hintergrundbild) anhängen.</summary>
+    void FuegeBildBlockAn(string dateiname)
+    {
+        var ordner = System.IO.Path.GetDirectoryName(_note!.Pfad)!;
+        var ink = new InkBlockVm { Bild = dateiname };
+        ink.LadeBild(ordner, Math.Max(400, BlockListe.ActualWidth));
+        RegistriereVm(ink);
+        _bloecke.Add(ink);
+    }
+
+    void BildEinfuegen_Click(object sender, RoutedEventArgs e)
+    {
+        if (_note is null) return;
+        var dialog = new OpenFileDialog
+        {
+            Title = "Bild einfügen",
+            Filter = "Bilder|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp|Alle Dateien|*.*",
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+        FuegeBildBlockAn(KopiereAnhang(dialog.FileName));
+        var text = new TextBlockVm();
+        RegistriereVm(text);
+        _bloecke.Add(text);
+        MeldeAenderung();
+    }
+
+    /// <summary>KI-erzeugte Dateien übernehmen: Bilder als zeichenbare Blöcke, Rest als Link.</summary>
+    void HaengeDateienAn(List<string> quellen)
+    {
+        var links = new List<string>();
+        string? ersterAnhang = null;
+        foreach (var quelle in quellen)
+        {
+            var dateiname = KopiereAnhang(quelle);
+            if (IstBild(quelle))
+            {
+                FuegeBildBlockAn(dateiname);
+            }
+            else
+            {
+                links.Add($"📎 [{System.IO.Path.GetFileName(quelle)}]({dateiname})");
+                ersterAnhang ??= System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(_note!.Pfad)!, dateiname);
+            }
+        }
+        if (links.Count > 0)
+        {
+            var letzter = _bloecke.OfType<TextBlockVm>().LastOrDefault();
+            if (letzter is null)
+            {
+                letzter = new TextBlockVm();
+                RegistriereVm(letzter);
+                _bloecke.Add(letzter);
+            }
+            var t = letzter.Text.TrimEnd();
+            letzter.Text = (t.Length > 0 ? t + "\n\n" : "") + string.Join('\n', links);
+        }
+        MeldeAenderung();
+        // Nicht-Bild-Anhänge im Explorer zeigen, damit man sie direkt öffnen kann
+        if (ersterAnhang is not null)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{ersterAnhang}\"");
+            }
+            catch { }
+        }
+    }
+
     // ---------- KI (V2) ----------
 
     void Ki_Click(object sender, RoutedEventArgs e)
@@ -337,11 +430,8 @@ public partial class NoteEditor : UserControl
         menu.IsOpen = true;
     }
 
-    void KiAktion_Click(object sender, RoutedEventArgs e)
+    string? AktuellerKiBody()
     {
-        if (Ki is null || _note is null) return;
-        var aktion = Enum.Parse<KiAktion>((string)((MenuItem)sender).Tag);
-
         var body = KiService.ErzeugeKiBody(_bloecke.Select<BlockVm, NoteBlock>(vm => vm switch
         {
             TextBlockVm t => t.ZuModel(),
@@ -353,8 +443,16 @@ public partial class NoteEditor : UserControl
             MessageBox.Show(Window.GetWindow(this)!,
                 "Die Notiz enthält noch keinen Text, den die KI verarbeiten könnte.",
                 "NotizApp", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
+            return null;
         }
+        return body;
+    }
+
+    void KiAktion_Click(object sender, RoutedEventArgs e)
+    {
+        if (Ki is null || _note is null) return;
+        var aktion = Enum.Parse<KiAktion>((string)((MenuItem)sender).Tag);
+        if (AktuellerKiBody() is not string body) return;
 
         var dialog = new KiVorschlagWindow(Ki, aktion, body)
         {
@@ -363,6 +461,23 @@ public partial class NoteEditor : UserControl
         if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.Ergebnis))
             return;
         UebernehmeKiErgebnis(aktion, dialog.Ergebnis);
+    }
+
+    void KiDokument_Click(object sender, RoutedEventArgs e)
+    {
+        if (Ki is null || _note is null) return;
+        var auftrag = TextPromptWindow.Frage(Window.GetWindow(this)!, "Dateien erstellen/suchen",
+            "Was soll Claude erstellen oder suchen?\n(z.B. \"Kundenschreiben mit Terminvorschlag als PDF\"\noder \"Explosionszeichnung / Bilder zur Vaillant ecoTEC\")");
+        if (string.IsNullOrWhiteSpace(auftrag)) return;
+        if (AktuellerKiBody() is not string body) return;
+
+        var dialog = new KiVorschlagWindow(Ki, auftrag, body)
+        {
+            Owner = Window.GetWindow(this),
+        };
+        var ok = dialog.ShowDialog() == true && dialog.ErzeugteDateien.Count > 0;
+        if (ok) HaengeDateienAn(dialog.ErzeugteDateien);
+        dialog.RaeumeAusgabeAuf();
     }
 
     void UebernehmeKiErgebnis(KiAktion aktion, string text)
