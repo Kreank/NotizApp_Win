@@ -31,12 +31,16 @@ public partial class KiVorschlagWindow : Window
     {
         try
         {
-            var hinweis = await _ki.PruefeVerfuegbarAsync();
+            // Docker bei Bedarf automatisch starten (Statusanzeige im Dialog)
+            var hinweis = await _ki.StelleDockerBereitAsync(
+                s => Dispatcher.Invoke(() => StatusText.Text = s), _cts.Token);
+            hinweis ??= await _ki.PruefeVerfuegbarAsync();
             if (hinweis is not null)
             {
                 ZeigeFehler(hinweis);
                 return;
             }
+            StatusText.Text = "Claude denkt nach…";
             var antwort = await _ki.FrageAsync(_aktion, _body, _cts.Token);
             WartePanel.Visibility = Visibility.Collapsed;
             ErgebnisBox.Text = antwort;

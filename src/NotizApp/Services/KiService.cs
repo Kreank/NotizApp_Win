@@ -75,7 +75,58 @@ public class KiService
         _ => throw new ArgumentOutOfRangeException(nameof(aktion)),
     };
 
-    /// <summary>Prüft, ob Docker läuft und das Image gebaut ist. Liefert null wenn ok, sonst einen Hinweistext.</summary>
+    /// <summary>
+    /// Sorgt dafür, dass Docker läuft — startet Docker Desktop bei Bedarf
+    /// automatisch und wartet, bis die Engine bereit ist.
+    /// Liefert null wenn ok, sonst einen Hinweistext.
+    /// </summary>
+    public async Task<string?> StelleDockerBereitAsync(Action<string>? status, CancellationToken ct)
+    {
+        if (await DockerLaeuftAsync(ct)) return null;
+
+        var exe = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "Docker", "Docker", "Docker Desktop.exe");
+        if (!File.Exists(exe))
+            return "Docker Desktop wurde nicht gefunden.\n\n" +
+                   "Bitte Docker Desktop installieren und einmalig\n    .\\docker\\einrichten.ps1\nausführen.";
+
+        status?.Invoke("Docker wird gestartet…");
+        try
+        {
+            // -Autostart = wie beim Windows-Anmelde-Autostart: ohne Dashboard-Fenster
+            Process.Start(new ProcessStartInfo(exe, "-Autostart") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            return $"Docker Desktop konnte nicht gestartet werden:\n{ex.Message}";
+        }
+
+        var ende = DateTime.UtcNow + TimeSpan.FromSeconds(120);
+        while (DateTime.UtcNow < ende)
+        {
+            await Task.Delay(3000, ct);
+            if (await DockerLaeuftAsync(ct)) return null;
+        }
+        return "Docker ist nicht rechtzeitig gestartet (2-Minuten-Limit).\n" +
+               "Bitte Docker Desktop manuell starten und erneut versuchen.";
+    }
+
+    async Task<bool> DockerLaeuftAsync(CancellationToken ct)
+    {
+        try
+        {
+            var (code, _, _) = await StarteAsync("docker",
+                "info --format {{.ServerVersion}}", stdin: null, ct, TimeSpan.FromSeconds(10));
+            return code == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Prüft, ob das Claude-Image gebaut ist. Liefert null wenn ok, sonst einen Hinweistext.</summary>
     public async Task<string?> PruefeVerfuegbarAsync()
     {
         try
