@@ -8,7 +8,7 @@ namespace NotizApp.Services;
 public class TaskItem
 {
     public required Note Note { get; init; }
-    public required int BlockIndex { get; init; }
+    public required int ElementIndex { get; init; }
     public required int ZeilenIndex { get; init; }
     public required string Text { get; init; }
     public required bool Erledigt { get; init; }
@@ -31,7 +31,7 @@ public class TaskItem
 }
 
 /// <summary>
-/// Findet Markdown-Checkboxen (`- [ ]` / `- [x]`) in den Text-Blöcken aller Notizen
+/// Findet Markdown-Checkboxen (`- [ ]` / `- [x]`) in den Textelementen aller Notizen
 /// und schaltet sie um (Zeile umschreiben + Notiz speichern).
 /// </summary>
 public static partial class TaskService
@@ -47,9 +47,9 @@ public static partial class TaskService
         var items = new List<TaskItem>();
         foreach (var note in notizen)
         {
-            for (int b = 0; b < note.Bloecke.Count; b++)
+            for (int b = 0; b < note.Elemente.Count; b++)
             {
-                if (note.Bloecke[b] is not TextBlockContent text) continue;
+                if (note.Elemente[b] is not TextElement text) continue;
                 var zeilen = text.Text.Replace("\r\n", "\n").Split('\n');
                 for (int z = 0; z < zeilen.Length; z++)
                 {
@@ -70,7 +70,7 @@ public static partial class TaskService
                     items.Add(new TaskItem
                     {
                         Note = note,
-                        BlockIndex = b,
+                        ElementIndex = b,
                         ZeilenIndex = z,
                         Text = inhalt,
                         Erledigt = m.Groups[2].Value is "x" or "X",
@@ -89,7 +89,7 @@ public static partial class TaskService
     /// <summary>Checkbox in der Quell-Notiz umschalten und Notiz speichern.</summary>
     public static void Umschalten(TaskItem item, NoteStore store)
     {
-        if (item.Note.Bloecke.ElementAtOrDefault(item.BlockIndex) is not TextBlockContent text)
+        if (item.Note.Elemente.ElementAtOrDefault(item.ElementIndex) is not TextElement text)
             return;
         var zeilen = text.Text.Replace("\r\n", "\n").Split('\n');
         if (item.ZeilenIndex >= zeilen.Length) return;

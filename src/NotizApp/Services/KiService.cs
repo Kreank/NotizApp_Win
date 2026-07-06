@@ -22,20 +22,14 @@ public class KiService
     static readonly TimeSpan Zeitlimit = TimeSpan.FromSeconds(180);
 
     /// <summary>
-    /// Body für die KI erzeugen: Text-Blöcke unverändert, Tinten-Blöcke
-    /// durch ihren erkannten Text ersetzt. Kein Frontmatter.
+    /// Body für die KI erzeugen: Textelemente in Leserichtung, danach der im
+    /// Hintergrund erkannte Text der Handschrift. Kein Frontmatter.
     /// </summary>
-    public static string ErzeugeKiBody(IEnumerable<NoteBlock> bloecke)
+    public static string ErzeugeKiBody(IEnumerable<string> texte, string tintenText)
     {
         var sb = new StringBuilder();
-        foreach (var b in bloecke)
+        foreach (var text in texte.Append(tintenText))
         {
-            var text = b switch
-            {
-                TextBlockContent t => t.Text,
-                InkBlockContent i => i.ErkannterText,
-                _ => "",
-            };
             if (!string.IsNullOrWhiteSpace(text))
             {
                 sb.Append(text.Trim());

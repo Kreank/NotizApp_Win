@@ -30,30 +30,47 @@ public class NoteMeta
     public string? Dringlichkeit { get; set; }
 }
 
-/// <summary>Ein Inhaltsblock der Notiz (Text oder Tinte).</summary>
-public abstract class NoteBlock { }
+/// <summary>
+/// Ein frei auf der Notiz-Fläche platziertes Element (Freiform-Canvas).
+/// Position/Breite in Canvas-Koordinaten (Pixel).
+/// </summary>
+public abstract class NoteElement
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Breite { get; set; } = 620;
+}
 
-public class TextBlockContent : NoteBlock
+/// <summary>Textfeld auf der Fläche. Höhe ergibt sich aus dem Inhalt.</summary>
+public class TextElement : NoteElement
 {
     public string Text { get; set; } = "";
+    /// <summary>Hex-Farbe "#RRGGBB", null = Standardfarbe des Designs (hell/dunkel).</summary>
+    public string? Farbe { get; set; }
 }
 
-public class InkBlockContent : NoteBlock
+/// <summary>Bild auf der Fläche (Dateiname neben der .md) — Tinte kann darüber liegen.</summary>
+public class BildElement : NoteElement
 {
-    /// <summary>Dateiname des ISF-Sidecars, z.B. "20260706-094100-anruf.t1.isf".</summary>
     public string Datei { get; set; } = "";
-    /// <summary>Optionales Hintergrundbild (Dateiname neben der .md) — zum Draufzeichnen.</summary>
-    public string? Bild { get; set; }
-    /// <summary>Papier-Muster: null (blanko), "linien", "karo", "punkte".</summary>
-    public string? Muster { get; set; }
-    public string ErkannterText { get; set; } = "";
-    public double Hoehe { get; set; } = 320;
-    /// <summary>Lazy geladen; null solange die ISF-Datei noch nicht gelesen wurde.</summary>
-    public StrokeCollection? Strokes { get; set; }
+    public double Hoehe { get; set; } = 240;
 }
+
+/// <summary>Abgelegte Datei (xlsx/docx/md/txt/pdf …) als Objekt-Karte auf der Fläche.</summary>
+public class DateiElement : NoteElement
+{
+    public string Datei { get; set; } = "";
+    public double Hoehe { get; set; } = 96;
+}
+
+/// <summary>Alte Tinten-Sidecar-Datei (Blockformat vor dem Freiform-Canvas) samt
+/// Versatz, mit dem ihre Striche auf die Gesamtfläche zu verschieben sind.</summary>
+public record AltTinte(string Datei, double OffsetX, double OffsetY);
 
 /// <summary>
-/// Eine Notiz = eine Markdown-Datei mit Frontmatter + ISF-Sidecars.
+/// Eine Notiz = eine Markdown-Datei mit Frontmatter + einer Tinten-ISF daneben.
+/// Der Body beschreibt frei platzierte Elemente (Text/Bild/Datei); die Handschrift
+/// der ganzen Fläche liegt in EINER .tinte.isf.
 /// INPC nur für die Eigenschaften, die die Notizliste anzeigt.
 /// </summary>
 public class Note : INotifyPropertyChanged
@@ -68,9 +85,27 @@ public class Note : INotifyPropertyChanged
     public string Notizbuch { get; set; } = "";
 
     public NoteMeta Meta { get; set; } = new();
-    public List<NoteBlock> Bloecke { get; set; } = new();
 
-    /// <summary>Kompletter durchsuchbarer Text (Titel, Tags, Kunde, Text- und erkannte Ink-Blöcke).</summary>
+    /// <summary>Frei platzierte Elemente der Fläche.</summary>
+    public List<NoteElement> Elemente { get; set; } = new();
+
+    /// <summary>Dateiname der Tinten-ISF ("&lt;mdname&gt;.tinte.isf"), leer = keine Tinte.</summary>
+    public string TintenDatei { get; set; } = "";
+    /// <summary>Lazy geladen; null solange die ISF-Datei noch nicht gelesen wurde.</summary>
+    public StrokeCollection? Tinte { get; set; }
+    /// <summary>Im Hintergrund erkannter Text der Handschrift (für Suche + KI).</summary>
+    public string TintenText { get; set; } = "";
+
+    /// <summary>Gespeicherte Höhe der Fläche (wächst beim Schreiben mit).</summary>
+    public double FlaecheHoehe { get; set; } = 900;
+    /// <summary>Papier-Muster der Fläche: null (blanko), "linien", "karo", "punkte".</summary>
+    public string? Muster { get; set; }
+
+    /// <summary>Nicht null = Notiz liegt noch im alten Blockformat; die alten
+    /// .t*.isf-Sidecars werden beim ersten Tinte-Laden auf die Fläche migriert.</summary>
+    public List<AltTinte>? AltTinten { get; set; }
+
+    /// <summary>Kompletter durchsuchbarer Text (Titel, Tags, Kunde, Textelemente, erkannte Handschrift).</summary>
     public string VolltextCache { get; set; } = "";
 
     public string Dateiname => Path.GetFileName(Pfad);
@@ -90,25 +125,35 @@ public class Note : INotifyPropertyChanged
         }
     }
 
+    /// <summary>Textelemente in Leserichtung (oben nach unten).</summary>
+    public IEnumerable<TextElement> TexteInLeserichtung() =>
+        Elemente.OfType<TextElement>().OrderBy(t => t.Y).ThenBy(t => t.X);
+
     public string Vorschau
     {
         get
         {
-            foreach (var b in Bloecke)
+            foreach (var t in TexteInLeserichtung())
             {
-                string? s = b switch
-                {
-                    TextBlockContent t => t.Text,
-                    InkBlockContent i => string.IsNullOrWhiteSpace(i.ErkannterText) ? "✍ (Handschrift)" : "✍ " + i.ErkannterText,
-                    _ => null
-                };
-                if (!string.IsNullOrWhiteSpace(s))
-                {
-                    var zeile = s.Trim().Split('\n')[0].Trim();
-                    return zeile.Length > 120 ? zeile[..120] + "…" : zeile;
-                }
+                if (string.IsNullOrWhiteSpace(t.Text)) continue;
+                var zeile = t.Text.Trim().Split('\n')[0].Trim();
+                return zeile.Length > 120 ? zeile[..120] + "…" : zeile;
             }
-            return "";
+            if (!string.IsNullOrWhiteSpace(TintenText))
+            {
+                var zeile = "✍ " + TintenText.Trim().Split('\n')[0].Trim();
+                return zeile.Length > 120 ? zeile[..120] + "…" : zeile;
+            }
+            if (TintenDatei.Length > 0 || AltTinten is { Count: > 0 })
+                return "✍ (Handschrift)";
+            var datei = Elemente.OfType<DateiElement>().FirstOrDefault()
+                ?? (NoteElement?)Elemente.OfType<BildElement>().FirstOrDefault();
+            return datei switch
+            {
+                DateiElement d => "📎 " + d.Datei,
+                BildElement b => "🖼 " + b.Datei,
+                _ => "",
+            };
         }
     }
 
@@ -128,14 +173,11 @@ public class Note : INotifyPropertyChanged
         sb.AppendLine(string.Join(' ', Meta.Tags));
         if (!Meta.Kunde.IstLeer)
             sb.AppendLine($"{Meta.Kunde.Name} {Meta.Kunde.Telefon} {Meta.Kunde.Adresse}");
-        foreach (var b in Bloecke)
-        {
-            switch (b)
-            {
-                case TextBlockContent t: sb.AppendLine(t.Text); break;
-                case InkBlockContent i: sb.AppendLine(i.ErkannterText); break;
-            }
-        }
+        foreach (var t in TexteInLeserichtung())
+            sb.AppendLine(t.Text);
+        foreach (var d in Elemente.OfType<DateiElement>())
+            sb.AppendLine(d.Datei);
+        sb.AppendLine(TintenText);
         VolltextCache = sb.ToString().ToLowerInvariant();
     }
 }

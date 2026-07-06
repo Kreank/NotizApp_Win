@@ -53,29 +53,44 @@ Fehlercode F.28. Kunde hat bereits Wasser nachgefüllt.
 personenbezogenen Daten. Bei der Übergabe an die KI wird **nur der Body unterhalb
 des Kopfes** gesendet — Kundendaten verlassen den Rechner nie.
 
-**Handschrift:** Tintenstriche werden als `.isf`-Datei (Ink Serialized Format) neben
-der `.md`-Datei gespeichert und im Markdown referenziert. Der per Erkennung
-umgewandelte Text steht direkt im Markdown-Body.
+**Handschrift:** Die Tinte der ganzen Notiz-Fläche liegt in **einer**
+`.tinte.isf`-Datei (Ink Serialized Format) neben der `.md`-Datei und wird im
+Markdown referenziert. Der per Erkennung umgewandelte Text steht als Textelement
+direkt im Markdown-Body; frei platzierte Elemente werden über unsichtbare
+`<!--el …-->`-Marker (Position/Größe/Farbe) beschrieben — der Body bleibt
+dadurch les- und durchsuchbares Markdown. Notizen im alten Blockformat
+(```ink-Fences mit eigenen ISF-Dateien) werden beim Öffnen automatisch migriert.
 
 **Speicherort:** Frei wählbarer Ordner (Einstellung). Liegt er in OneDrive oder auf
 einem Netzlaufwerk, gibt es Synchronisation "gratis".
 
-## 4. Editor: Tastatur + Stift
+## 4. Editor: Freiform-Fläche (Tastatur + Stift auf einer Oberfläche)
 
-Eine Notiz besteht aus einer Folge von **Blöcken**:
+Eine Notiz ist **eine große Fläche** (Freiform-Canvas, wie ein Blatt Papier):
 
-- **Textblock** — normale Tastatureingabe (Markdown: Überschriften, Listen, Checkboxen)
-- **Tintenblock** — `InkCanvas`-Fläche für Handschrift und Skizzen
+- **Textfelder** — per Doppelklick überall setzbar; normale Tastatureingabe
+  (Markdown: Überschriften, Listen, Checkboxen), frei verschiebbar, Breite ziehbar
+- **Handschrift/Skizzen** — der Stift schreibt überall auf der Fläche, auch
+  über Objekten; Papier-Muster (Blanko/Liniert/Kariert/Punkte) pro Notiz
+- **Bilder und Dateien** (png, jpg, pdf, xlsx, docx, md, txt) — per „+ Datei",
+  Drag&Drop oder aus der KI; liegen als **frei verschieb- und skalierbare
+  Objekte** auf der Fläche, Draufzeichnen inklusive. PDFs zeigen die erste
+  Seite als Vorschau, Doppelklick öffnet die Datei
+- Die Fläche wächst beim Schreiben automatisch nach unten mit
 
-Stift-Verhalten (wie heute Standard):
+Stift-Verhalten:
 
 - **Umwandlungs-Button in der Werkzeugleiste** ("Handschrift → Text"):
-  - **Aktiv:** Geschriebenes wird erkannt und als Tipptext in die Notiz eingefügt
+  - **Aktiv:** Geschriebenes wird erkannt und als Textfeld **an der
+    Schreibstelle** eingefügt — **in der Stiftfarbe**
   - **Inaktiv:** Tinte bleibt Tinte — wie auf Papier
+- **Lasso-Auswahl + „⬚→A"**: markierte Handschrift gezielt in Text umwandeln
+  (Position und Stiftfarbe bleiben erhalten)
 - Handschrift, die Tinte bleibt, wird **im Hintergrund trotzdem erkannt** und der
   Text unsichtbar für Suche + KI mitgespeichert
-- Skizzen/Diagramme bleiben immer Tinte (keine Zwangsumwandlung)
-- Werkzeuge: Stift (Farbe/Dicke), Textmarker, Radierer, Lasso-Auswahl
+- Skizzen/Diagramme und Marker-Striche bleiben immer Tinte (keine Zwangsumwandlung)
+- Werkzeuge: Auswählen/Tippen, Stift (Farbe/Dicke), Textmarker, Radierer
+  (Strich/punktgenau), Lasso-Auswahl
 
 ## 5. Schnellerfassung (Kundenanrufe)
 
@@ -116,8 +131,8 @@ Volltextsuche über:
 - **Dateien erstellen/suchen** (✨ → „Dateien erstellen/suchen…"): freier
   Auftrag; Claude arbeitet mit Schreibrechten + Internet in einem leeren
   Austauschordner (`/ausgabe`-Mount, pandoc/weasyprint/curl im Image).
-  Übernahme nach Bestätigung: Bilder → zeichenbare Blöcke, andere Dateien
-  (PDF …) → Anhang neben der Notiz + Link im Text
+  Übernahme nach Bestätigung: alle Dateien landen als **Objekte auf der
+  Fläche** (Bilder direkt zeichenbar, PDFs mit Seitenvorschau)
 
 ## 9. Erscheinungsbild
 
@@ -129,6 +144,7 @@ Volltextsuche über:
 | Version | Inhalt |
 |---|---|
 | **V1** | Grundgerüst: Notizbücher/Tags, Editor mit Text- und Tintenblöcken, Handschrift→Text-Button, Hintergrund-Erkennung, Speichern als Markdown+ISF, Volltextsuche, Vorlagen, Schnellerfassung (Tray + Hotkey + Autostart) |
+| **V1.5** | Freiform-Editor: eine Fläche pro Notiz, Textfelder/Bilder/Dateien als frei platzierbare Objekte, Umwandlung an Ort und Stelle in Stiftfarbe, Lasso→Text, automatische Migration alter Block-Notizen |
 | **V1.1** | Zentrale Aufgabenliste mit Fälligkeiten, Feinschliff Vorlagen, Export (PDF/Druck) |
 | **V2** | KI-Integration (Docker/Claude): Zusammenfassen, Aufbereiten, Aufgaben extrahieren |
 
@@ -136,9 +152,10 @@ Volltextsuche über:
 
 - **Handschrifterkennung Deutsch** setzt das Windows-Sprachpaket "Handschrift"
   voraus — beim ersten Start prüfen und ggf. Hinweis anzeigen
-- Der gemischte Block-Editor (Text + Tinte) ist der aufwendigste Teil der App —
-  V1 startet bewusst mit einem einfachen Blockmodell (Tintenblock = feste Fläche,
-  erweiterbar), statt ein OneNote-Freiform-Canvas nachzubauen
+- ~~V1 startet bewusst mit einem einfachen Blockmodell statt OneNote-Freiform-Canvas~~
+  → revidiert (Anforderung 07/2026): der Editor **ist** jetzt ein Freiform-Canvas;
+  alte Block-Notizen werden beim Öffnen/Speichern automatisch migriert
 - ~~Später denkbar: Screenshots einfügen und mit Stift markieren~~ → umgesetzt:
-  „+ Bild"-Button und KI-gelieferte Bilder werden als Tintenfläche mit
-  Bild-Hintergrund eingefügt (Draufzeichnen inklusive)
+  Bilder/Dateien liegen als Objekte auf der Fläche (Draufzeichnen inklusive)
+- Freiform-Grenze: Migrierte Alt-Notizen werden näherungsweise gestapelt
+  (geschätzte Texthöhen) — Feinlayout ggf. einmalig von Hand nachschieben

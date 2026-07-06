@@ -1,11 +1,12 @@
 using System.IO;
 using System.Windows.Ink;
+using System.Windows.Media;
 using NotizApp.Models;
 
 namespace NotizApp.Services;
 
 /// <summary>
-/// Lädt und speichert Notizen als Markdown + ISF-Sidecars im Datenordner.
+/// Lädt und speichert Notizen als Markdown + Tinten-ISF im Datenordner.
 /// Ein Ordner-Level unterhalb des Datenordners = Notizbücher.
 /// </summary>
 public class NoteStore
@@ -39,10 +40,11 @@ public class NoteStore
                     Typ = "leer",
                     Tags = { "hilfe" },
                 },
-                Bloecke =
+                Elemente =
                 {
-                    new TextBlockContent
+                    new TextElement
                     {
+                        X = 0, Y = 8, Breite = 620,
                         Text = """
                         # Willkommen! 👋
 
@@ -50,7 +52,8 @@ public class NoteStore
 
                         - **Notizbücher** sind Ordner in der Seitenleiste, **#Tags** vergibst du oben in der Notiz.
                         - **Strg+Alt+N** öffnet von überall die Schnellerfassung (z.B. für Kundenanrufe).
-                        - **+ Tintenfläche** fügt eine Fläche für den Stift ein. Mit aktivem **„Handschrift → Text"** wird Geschriebenes automatisch zu Tipptext.
+                        - Jede Notiz ist eine **freie Fläche**: Mit dem Stift schreibst du überall, Textfelder setzt du per **Doppelklick**, Bilder und Dateien legst du mit **+ Datei** als verschieb- und skalierbare Objekte ab — Draufzeichnen inklusive.
+                        - Mit aktivem **„Handschrift → Text"** wird Geschriebenes automatisch zu Tipptext in der Stiftfarbe. Oder: Striche mit dem **Lasso** markieren und **„Auswahl → Text"** drücken.
                         - Aufgaben: `- [ ] Rückruf @2026-07-08` — erscheinen in der Ansicht **Aufgaben**.
                         - Alles liegt als Markdown-Datei in deinem Datenordner — nichts ist versteckt.
 
@@ -87,7 +90,7 @@ public class NoteStore
             yield return Path.GetFileName(d);
     }
 
-    /// <summary>Alle .md-Dateien parsen (Ink lazy). In-Memory-Index für Suche und Aufgaben.</summary>
+    /// <summary>Alle .md-Dateien parsen (Tinte lazy). In-Memory-Index für Suche und Aufgaben.</summary>
     public void LadeAlle()
     {
         Notizen.Clear();
@@ -104,8 +107,8 @@ public class NoteStore
                         Pfad = md,
                         Notizbuch = nb,
                         Meta = meta,
-                        Bloecke = Frontmatter.ParseBody(body),
                     };
+                    Frontmatter.ParseBody(body, note);
                     note.BaueVolltext();
                     Notizen.Add(note);
                 }
@@ -118,67 +121,87 @@ public class NoteStore
         Notizen.Sort((a, b) => b.Meta.Geaendert.CompareTo(a.Meta.Geaendert));
     }
 
-    /// <summary>ISF-Sidecars einer Notiz laden (lazy, beim Öffnen im Editor).</summary>
+    /// <summary>
+    /// Tinte einer Notiz laden (lazy, beim Öffnen im Editor). Notizen im alten
+    /// Blockformat: alle alten .t*.isf werden mit ihrem Y-Versatz auf die
+    /// Gesamtfläche verschoben und zu EINER StrokeCollection zusammengeführt.
+    /// </summary>
     public void LadeTinte(Note note)
     {
+        if (note.Tinte is not null) return;
         var ordner = Path.GetDirectoryName(note.Pfad)!;
-        foreach (var ink in note.Bloecke.OfType<InkBlockContent>())
+
+        if (note.AltTinten is not null)
         {
-            if (ink.Strokes is not null) continue;
-            var pfad = Path.Combine(ordner, ink.Datei);
-            try
+            var alle = new StrokeCollection();
+            foreach (var alt in note.AltTinten)
             {
-                if (ink.Datei.Length > 0 && File.Exists(pfad))
-                {
-                    using var fs = File.OpenRead(pfad);
-                    ink.Strokes = new StrokeCollection(fs);
-                }
-                else
-                {
-                    ink.Strokes = new StrokeCollection();
-                }
+                var strokes = LadeIsf(Path.Combine(ordner, alt.Datei));
+                if (strokes.Count == 0) continue;
+                var m = Matrix.Identity;
+                m.Translate(alt.OffsetX, alt.OffsetY);
+                strokes.Transform(m, applyToStylusTip: false);
+                alle.Add(strokes);
             }
-            catch
-            {
-                ink.Strokes = new StrokeCollection();
-            }
+            note.Tinte = alle;
+            note.AltTinten = null; // migriert — beim nächsten Speichern wird das neue Format geschrieben
+            return;
+        }
+
+        note.Tinte = note.TintenDatei.Length > 0
+            ? LadeIsf(Path.Combine(ordner, note.TintenDatei))
+            : new StrokeCollection();
+    }
+
+    static StrokeCollection LadeIsf(string pfad)
+    {
+        try
+        {
+            if (!File.Exists(pfad)) return new StrokeCollection();
+            using var fs = File.OpenRead(pfad);
+            return new StrokeCollection(fs);
+        }
+        catch
+        {
+            return new StrokeCollection();
         }
     }
 
     // ---------- Speichern ----------
 
     /// <summary>
-    /// Schreibt .md + alle ISF-Sidecars, räumt verwaiste .t*.isf auf und
+    /// Schreibt .md + Tinten-ISF, räumt alte/verwaiste .t*.isf auf und
     /// aktualisiert Volltext + Geaendert.
     /// </summary>
     public void Speichere(Note note)
     {
+        // Altformat erst auf die Fläche migrieren, sonst gingen die
+        // Block-Zuordnungen der alten ISF-Dateien verloren
+        if (note.AltTinten is not null) LadeTinte(note);
+
         note.Meta.Geaendert = DateTime.Now;
         var ordner = Path.GetDirectoryName(note.Pfad)!;
         Directory.CreateDirectory(ordner);
-
-        // Ink-Dateinamen vergeben/normalisieren: <mdname>.t<n>.isf
         var mdName = Path.GetFileNameWithoutExtension(note.Pfad);
-        int t = 1;
-        foreach (var ink in note.Bloecke.OfType<InkBlockContent>())
-            ink.Datei = $"{mdName}.t{t++}.isf";
 
-        File.WriteAllText(note.Pfad, Frontmatter.Schreibe(note.Meta, note.Bloecke));
-
-        var gueltig = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var ink in note.Bloecke.OfType<InkBlockContent>())
+        if (note.Tinte is { Count: > 0 })
         {
-            gueltig.Add(ink.Datei);
-            if (ink.Strokes is null) continue; // nie geladen → Datei unverändert lassen
-            var pfad = Path.Combine(ordner, ink.Datei);
-            using var fs = File.Create(pfad);
-            ink.Strokes.Save(fs);
+            note.TintenDatei = $"{mdName}.tinte.isf";
+            using var fs = File.Create(Path.Combine(ordner, note.TintenDatei));
+            note.Tinte.Save(fs);
         }
+        else if (note.Tinte is not null)
+        {
+            note.TintenDatei = ""; // Tinte komplett gelöscht → Datei fällt der Aufräumung zum Opfer
+        }
+        // note.Tinte == null (nie geladen): TintenDatei und ISF unverändert lassen
 
-        // Verwaiste Sidecars dieser Notiz löschen
+        File.WriteAllText(note.Pfad, Frontmatter.Schreibe(note));
+
+        // Alte Block-Sidecars (.t1.isf …) und verwaiste Tinten-Dateien löschen
         foreach (var isf in Directory.EnumerateFiles(ordner, $"{mdName}.t*.isf"))
         {
-            if (!gueltig.Contains(Path.GetFileName(isf)))
+            if (!Path.GetFileName(isf).Equals(note.TintenDatei, StringComparison.OrdinalIgnoreCase))
             {
                 try { File.Delete(isf); } catch { }
             }
@@ -199,7 +222,7 @@ public class NoteStore
             Notizbuch = notizbuch,
             Pfad = NeuerPfad(notizbuch, v.Key),
             Meta = new NoteMeta { Titel = v.TitelVorschlag, Typ = v.Key },
-            Bloecke = { new TextBlockContent { Text = v.Body } },
+            Elemente = { new TextElement { X = 0, Y = 8, Breite = 620, Text = v.Body } },
         };
         Speichere(note);
         return note;
@@ -225,6 +248,9 @@ public class NoteStore
     public void Verschiebe(Note note, string zielNotizbuch)
     {
         if (note.Notizbuch == zielNotizbuch) return;
+        // Altformat vor dem Verschieben migrieren (schreibt neue .md + .tinte.isf),
+        // sonst verlöre der Format-Neuschrieb unten die Block-Zuordnung der Tinte
+        if (note.AltTinten is not null) Speichere(note);
         var altOrdner = Path.GetDirectoryName(note.Pfad)!;
         var mdName = Path.GetFileNameWithoutExtension(note.Pfad);
         var zielOrdner = Path.Combine(DataFolder, zielNotizbuch);
@@ -247,19 +273,27 @@ public class NoteStore
         }
         if (zielBasis != mdName)
         {
-            // Referenzen in den Blöcken (ISF-/Bild-Namen, Anhang-Links) anpassen
-            foreach (var ink in note.Bloecke.OfType<InkBlockContent>())
+            // Referenzen in Elementen/Tinte (Dateinamen, Anhang-Links) anpassen
+            string Umbenennen(string s) =>
+                s.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
+            note.TintenDatei = Umbenennen(note.TintenDatei);
+            if (note.AltTinten is not null)
+                note.AltTinten = note.AltTinten
+                    .Select(a => a with { Datei = Umbenennen(a.Datei) }).ToList();
+            foreach (var el in note.Elemente)
             {
-                ink.Datei = ink.Datei.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
-                ink.Bild = ink.Bild?.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
+                switch (el)
+                {
+                    case BildElement b: b.Datei = Umbenennen(b.Datei); break;
+                    case DateiElement d: d.Datei = Umbenennen(d.Datei); break;
+                    case TextElement t: t.Text = Umbenennen(t.Text); break;
+                }
             }
-            foreach (var text in note.Bloecke.OfType<TextBlockContent>())
-                text.Text = text.Text.Replace(mdName + ".", zielBasis + ".", StringComparison.Ordinal);
         }
         note.Pfad = zielMd;
         note.Notizbuch = zielNotizbuch;
         // Frontmatter/Body mit neuen Dateinamen neu schreiben
-        File.WriteAllText(note.Pfad, Frontmatter.Schreibe(note.Meta, note.Bloecke));
+        File.WriteAllText(note.Pfad, Frontmatter.Schreibe(note));
         note.MeldeAnzeigeGeaendert();
     }
 

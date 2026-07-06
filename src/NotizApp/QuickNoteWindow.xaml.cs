@@ -114,18 +114,20 @@ public partial class QuickNoteWindow : Window
         }
 
         var text = TextBox.Text.TrimEnd();
-        note.Bloecke.Add(new TextBlockContent { Text = text });
+        note.Elemente.Add(new TextElement { X = 0, Y = 8, Breite = 620, Text = text });
 
         if (TintenFlaeche.Strokes.Count > 0)
         {
-            var ink = new InkBlockContent
-            {
-                Hoehe = 200,
-                Strokes = TintenFlaeche.Strokes.Clone(),
-            };
+            // Striche unter das Textfeld auf die Fläche legen
+            double versatz = 8 + Math.Max(28, text.Split('\n').Length * 22 + 16) + 24;
+            var tinte = TintenFlaeche.Strokes.Clone();
+            var m = System.Windows.Media.Matrix.Identity;
+            m.Translate(0, versatz);
+            tinte.Transform(m, applyToStylusTip: false);
+            note.Tinte = tinte;
+            note.FlaecheHoehe = tinte.GetBounds().Bottom + 400; // Bounds sind schon versetzt
             // Hintergrunderkennung, damit die Handschrift sofort durchsuchbar ist
-            ink.ErkannterText = await _erkennung.ErkenneAsync(ink.Strokes) ?? "";
-            note.Bloecke.Add(ink);
+            note.TintenText = await _erkennung.ErkenneAsync(tinte) ?? "";
         }
 
         note.Pfad = _store.NeuerPfad(notizbuch, vorlage);

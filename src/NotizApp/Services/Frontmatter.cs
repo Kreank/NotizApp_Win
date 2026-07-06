@@ -1,19 +1,23 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using NotizApp.Models;
 
 namespace NotizApp.Services;
 
 /// <summary>
 /// Parser/Writer für unser kontrolliertes YAML-Frontmatter-Subset und das
-/// Body-Format mit ```ink-Fences. Kein vollwertiges YAML — wir schreiben die
-/// Dateien selbst und lesen nur, was wir schreiben.
+/// Freiform-Body-Format: ein ```tinte-Fence (eine ISF pro Notiz) plus
+/// &lt;!--el …--&gt;-Marker für frei platzierte Text-/Bild-/Datei-Elemente.
+/// Kein vollwertiges YAML/HTML — wir schreiben die Dateien selbst und lesen
+/// nur, was wir schreiben. Das alte Blockformat (```ink-Fences) wird beim
+/// Lesen erkannt und in Elemente migriert.
 /// </summary>
-public static class Frontmatter
+public static partial class Frontmatter
 {
     const string DatumFormat = "yyyy-MM-ddTHH:mm";
 
-    // ---------- Parsen ----------
+    // ---------- Parsen: Kopf ----------
 
     /// <summary>Zerlegt den kompletten Dateiinhalt in Meta + Body-Text.</summary>
     public static (NoteMeta Meta, string Body) Parse(string inhalt)
@@ -90,7 +94,7 @@ public static class Frontmatter
             .ToList();
     }
 
-    // ---------- Schreiben ----------
+    // ---------- Schreiben: Kopf ----------
 
     public static string SchreibeKopf(NoteMeta meta)
     {
@@ -119,27 +123,41 @@ public static class Frontmatter
     static string Bereinige(string? s) =>
         (s ?? "").Replace('\n', ' ').Replace('\r', ' ').Trim();
 
-    // ---------- Body: ink-Fences ----------
+    // ---------- Body: Elemente + Tinte ----------
 
-    public static List<NoteBlock> ParseBody(string body)
+    [GeneratedRegex("""(\w+)=(?:"([^"]*)"|(\S+?))(?=\s|-->|$)""")]
+    private static partial Regex AttrRegex();
+
+    /// <summary>Füllt Elemente/Tinte/Fläche der Notiz aus dem Body (beide Formate).</summary>
+    public static void ParseBody(string body, Note note)
     {
-        var bloecke = new List<NoteBlock>();
-        var zeilen = body.Replace("\r\n", "\n").Split('\n');
-        var text = new StringBuilder();
+        body = body.Replace("\r\n", "\n");
+        if (body.Contains("```ink\n") || body.Contains("```ink\r") ||
+            (!body.Contains("<!--el ") && !body.Contains("```tinte")))
+        {
+            ParseAltesBlockFormat(body, note);
+            return;
+        }
+
+        var zeilen = body.Split('\n');
+        TextElement? offenerText = null;
+        var textZeilen = new StringBuilder();
 
         void SchliesseText()
         {
-            var t = text.ToString().Trim('\n');
-            text.Clear();
-            bloecke.Add(new TextBlockContent { Text = t });
+            if (offenerText is null) return;
+            offenerText.Text = textZeilen.ToString().Trim('\n');
+            textZeilen.Clear();
+            offenerText = null;
         }
 
         for (int i = 0; i < zeilen.Length; i++)
         {
-            if (zeilen[i].TrimEnd() == "```ink")
+            var zeile = zeilen[i];
+
+            if (zeile.TrimEnd() == "```tinte")
             {
                 SchliesseText();
-                var ink = new InkBlockContent();
                 var erkannt = new StringBuilder();
                 bool inText = false;
                 i++;
@@ -147,14 +165,12 @@ public static class Frontmatter
                 {
                     var z = zeilen[i];
                     if (!inText && z.StartsWith("datei:"))
-                        ink.Datei = z["datei:".Length..].Trim();
-                    else if (!inText && z.StartsWith("bild:"))
-                        ink.Bild = z["bild:".Length..].Trim() is { Length: > 0 } b ? b : null;
-                    else if (!inText && z.StartsWith("muster:"))
-                        ink.Muster = z["muster:".Length..].Trim() is { Length: > 0 } m ? m : null;
+                        note.TintenDatei = z["datei:".Length..].Trim();
                     else if (!inText && z.StartsWith("hoehe:") &&
                              double.TryParse(z["hoehe:".Length..].Trim(), CultureInfo.InvariantCulture, out var h))
-                        ink.Hoehe = h;
+                        note.FlaecheHoehe = h;
+                    else if (!inText && z.StartsWith("muster:"))
+                        note.Muster = z["muster:".Length..].Trim() is { Length: > 0 } m ? m : null;
                     else if (!inText && z.StartsWith("text:"))
                     {
                         inText = true;
@@ -164,8 +180,122 @@ public static class Frontmatter
                     else if (inText)
                         erkannt.AppendLine(z);
                 }
-                ink.ErkannterText = erkannt.ToString().TrimEnd('\n');
-                bloecke.Add(ink);
+                note.TintenText = erkannt.ToString().TrimEnd('\n');
+                continue;
+            }
+
+            if (zeile.StartsWith("<!--el ") && zeile.TrimEnd().EndsWith("-->"))
+            {
+                SchliesseText();
+                var attrs = new Dictionary<string, string>();
+                foreach (Match m in AttrRegex().Matches(zeile))
+                    attrs[m.Groups[1].Value] = m.Groups[2].Success ? m.Groups[2].Value : m.Groups[3].Value;
+
+                var typ = zeile["<!--el ".Length..].TrimStart().Split(' ', 2)[0];
+                double Zahl(string key, double std) =>
+                    attrs.TryGetValue(key, out var v) &&
+                    double.TryParse(v, CultureInfo.InvariantCulture, out var d) ? d : std;
+
+                NoteElement? el = typ switch
+                {
+                    "text" => new TextElement
+                    {
+                        Farbe = attrs.TryGetValue("farbe", out var f) && f.Length > 0 ? f : null,
+                    },
+                    "bild" => new BildElement
+                    {
+                        Datei = attrs.GetValueOrDefault("datei", ""),
+                        Hoehe = Zahl("h", 240),
+                    },
+                    "datei" => new DateiElement
+                    {
+                        Datei = attrs.GetValueOrDefault("datei", ""),
+                        Hoehe = Zahl("h", 96),
+                    },
+                    _ => null,
+                };
+                if (el is null) continue;
+                el.X = Zahl("x", 0);
+                el.Y = Zahl("y", 0);
+                el.Breite = Zahl("b", 620);
+                note.Elemente.Add(el);
+                if (el is TextElement te) offenerText = te;
+                continue;
+            }
+
+            if (offenerText is not null)
+                textZeilen.AppendLine(zeile);
+            // Zeilen außerhalb jedes Elements (sollte es nicht geben) werden ignoriert.
+        }
+        SchliesseText();
+    }
+
+    // ---------- Altes Blockformat lesen und in Elemente migrieren ----------
+
+    /// <summary>
+    /// Altformat: Fließtext + ```ink-Fences (eigene ISF je Block). Die Blöcke
+    /// werden untereinander auf die Fläche gestapelt; die Striche der alten
+    /// ISF-Dateien werden erst beim Tinte-Laden mit dem hier bestimmten
+    /// Y-Versatz auf die Gesamtfläche verschoben (Note.AltTinten).
+    /// </summary>
+    static void ParseAltesBlockFormat(string body, Note note)
+    {
+        note.AltTinten = new List<AltTinte>();
+        var zeilen = body.Split('\n');
+        var text = new StringBuilder();
+        double y = 8;
+
+        void SchliesseText()
+        {
+            var t = text.ToString().Trim('\n');
+            text.Clear();
+            if (t.Length == 0) return;
+            note.Elemente.Add(new TextElement { X = 0, Y = y, Breite = 620, Text = t });
+            y += GeschaetzteTextHoehe(t) + 16;
+        }
+
+        for (int i = 0; i < zeilen.Length; i++)
+        {
+            if (zeilen[i].TrimEnd() == "```ink")
+            {
+                SchliesseText();
+                string datei = "", bild = "";
+                string? muster = null;
+                double hoehe = 320;
+                var erkannt = new StringBuilder();
+                bool inText = false;
+                i++;
+                for (; i < zeilen.Length && zeilen[i].TrimEnd() != "```"; i++)
+                {
+                    var z = zeilen[i];
+                    if (!inText && z.StartsWith("datei:"))
+                        datei = z["datei:".Length..].Trim();
+                    else if (!inText && z.StartsWith("bild:"))
+                        bild = z["bild:".Length..].Trim();
+                    else if (!inText && z.StartsWith("muster:"))
+                        muster = z["muster:".Length..].Trim() is { Length: > 0 } m ? m : null;
+                    else if (!inText && z.StartsWith("hoehe:") &&
+                             double.TryParse(z["hoehe:".Length..].Trim(), CultureInfo.InvariantCulture, out var h))
+                        hoehe = h;
+                    else if (!inText && z.StartsWith("text:"))
+                    {
+                        inText = true;
+                        var rest = z["text:".Length..].TrimStart();
+                        if (rest.Length > 0) erkannt.AppendLine(rest);
+                    }
+                    else if (inText)
+                        erkannt.AppendLine(z);
+                }
+
+                if (bild.Length > 0)
+                    note.Elemente.Add(new BildElement { X = 0, Y = y, Breite = 620, Datei = bild, Hoehe = hoehe });
+                note.Muster ??= muster;
+                if (datei.Length > 0)
+                    note.AltTinten.Add(new AltTinte(datei, 0, y));
+                var e = erkannt.ToString().TrimEnd('\n');
+                if (e.Length > 0)
+                    note.TintenText = note.TintenText.Length == 0 ? e : note.TintenText + "\n" + e;
+                y += hoehe + 16;
             }
             else
             {
@@ -173,35 +303,53 @@ public static class Frontmatter
             }
         }
         SchliesseText();
-
-        // Mindestens ein Text-Block muss existieren (Editor-Invariante).
-        if (!bloecke.Any(b => b is TextBlockContent))
-            bloecke.Add(new TextBlockContent());
-        return bloecke;
+        note.FlaecheHoehe = Math.Max(900, y + 400);
     }
 
-    public static string SchreibeBody(List<NoteBlock> bloecke)
+    /// <summary>Grobe Höhe eines Textblocks im Editor (14pt, umbrochen bei ~620px).</summary>
+    static double GeschaetzteTextHoehe(string text)
     {
+        int visuelleZeilen = 0;
+        foreach (var z in text.Split('\n'))
+            visuelleZeilen += Math.Max(1, (int)Math.Ceiling(z.Length / 80.0));
+        return Math.Max(28, visuelleZeilen * 22 + 8);
+    }
+
+    // ---------- Schreiben: Body ----------
+
+    public static string SchreibeBody(Note note)
+    {
+        var inv = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
-        foreach (var b in bloecke)
+
+        sb.Append("```tinte\n");
+        if (note.TintenDatei.Length > 0)
+            sb.Append($"datei: {note.TintenDatei}\n");
+        sb.Append($"hoehe: {((int)note.FlaecheHoehe).ToString(inv)}\n");
+        if (!string.IsNullOrWhiteSpace(note.Muster))
+            sb.Append($"muster: {note.Muster}\n");
+        if (!string.IsNullOrWhiteSpace(note.TintenText))
+            sb.Append($"text: {note.TintenText.Replace("\r\n", "\n").TrimEnd('\n')}\n");
+        sb.Append("```\n\n");
+
+        foreach (var el in note.Elemente.OrderBy(e => e.Y).ThenBy(e => e.X))
         {
-            switch (b)
+            string pos = $"x={(int)el.X} y={(int)el.Y} b={(int)el.Breite}";
+            switch (el)
             {
-                case TextBlockContent t:
+                case TextElement t:
+                    sb.Append($"<!--el text {pos}");
+                    if (!string.IsNullOrWhiteSpace(t.Farbe))
+                        sb.Append($" farbe={t.Farbe}");
+                    sb.Append("-->\n");
                     sb.Append(t.Text.Replace("\r\n", "\n").TrimEnd('\n'));
                     sb.Append("\n\n");
                     break;
-                case InkBlockContent i:
-                    sb.Append("```ink\n");
-                    sb.Append($"datei: {i.Datei}\n");
-                    if (!string.IsNullOrWhiteSpace(i.Bild))
-                        sb.Append($"bild: {i.Bild}\n");
-                    if (!string.IsNullOrWhiteSpace(i.Muster))
-                        sb.Append($"muster: {i.Muster}\n");
-                    sb.Append($"hoehe: {((int)i.Hoehe).ToString(CultureInfo.InvariantCulture)}\n");
-                    if (!string.IsNullOrWhiteSpace(i.ErkannterText))
-                        sb.Append($"text: {i.ErkannterText.Replace("\r\n", "\n").TrimEnd('\n')}\n");
-                    sb.Append("```\n\n");
+                case BildElement b:
+                    sb.Append($"<!--el bild {pos} h={(int)b.Hoehe} datei=\"{b.Datei}\"-->\n\n");
+                    break;
+                case DateiElement d:
+                    sb.Append($"<!--el datei {pos} h={(int)d.Hoehe} datei=\"{d.Datei}\"-->\n\n");
                     break;
             }
         }
@@ -209,6 +357,6 @@ public static class Frontmatter
     }
 
     /// <summary>Kompletten Dateiinhalt erzeugen.</summary>
-    public static string Schreibe(NoteMeta meta, List<NoteBlock> bloecke) =>
-        SchreibeKopf(meta) + "\n" + SchreibeBody(bloecke);
+    public static string Schreibe(Note note) =>
+        SchreibeKopf(note.Meta) + "\n" + SchreibeBody(note);
 }
