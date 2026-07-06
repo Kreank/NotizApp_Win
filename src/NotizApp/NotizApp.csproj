@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Windows-10.0.19041-TFM: nötig für die WinRT-Handschrifterkennung (Windows.UI.Input.Inking) -->
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms nur für das Tray-NotifyIcon -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- WPF0001: Fluent-ThemeMode ist in .NET 9 als experimentell markiert -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <AssemblyTitle>NotizApp</AssemblyTitle>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Das implizite WinForms-Using kollidiert sonst überall mit WPF-Typen -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+</Project>
