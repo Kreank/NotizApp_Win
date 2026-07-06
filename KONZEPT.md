@@ -101,13 +101,18 @@ Volltextsuche über:
 - **erkannten Text aus Handschrift** (Hintergrund-Erkennung, s. Abschnitt 4)
 - Titel, Tags, Kundenname im Kopf
 
-## 8. KI-Aufbereitung (V2)
+## 8. KI-Aufbereitung (V2) — umgesetzt
 
-- Claude läuft über die vorhandene Subscription in einem **Docker-Container**,
-  angesprochen als headless Session (`claude -p …`)
-- Die App sendet **nur den Notiz-Body ohne Frontmatter-Kopf**
-- Geplante Funktionen: Zusammenfassen, Text glätten/aufarbeiten, Aufgaben extrahieren
-- Ergebnis wird als Vorschlag angezeigt und erst nach Bestätigung übernommen
+- Claude läuft über die vorhandene Subscription in einem **Docker-Container**
+  (Image `notizapp-claude`, einmalige Einrichtung: `.\docker\einrichten.ps1`),
+  angesprochen als headless Session (`claude -p …`, Body via stdin)
+- Die App sendet **nur den Notiz-Body ohne Frontmatter-Kopf**; Tinten-Blöcke
+  werden durch ihren erkannten Text ersetzt. Der Container hat **keinen
+  Zugriff auf den Notizen-Ordner** (nur das Login-Volume ist gemountet)
+- Funktionen (✨-Button im Editor): Zusammenfassen, Text aufbereiten,
+  Aufgaben extrahieren
+- Ergebnis wird als Vorschlag angezeigt (editierbar) und erst nach
+  Bestätigung übernommen
 
 ## 9. Erscheinungsbild
 

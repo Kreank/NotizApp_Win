@@ -44,6 +44,7 @@ public partial class MainWindow : Window
         _initialisiert = true;
 
         Editor.Erkennung = erkennung;
+        Editor.Ki = new KiService();
         Editor.NotizGeaendert += Editor_NotizGeaendert;
         Editor.SpeichernAngefordert += SpeichereAktuelle;
 

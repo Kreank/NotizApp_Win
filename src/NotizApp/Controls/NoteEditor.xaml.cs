@@ -20,6 +20,9 @@ public partial class NoteEditor : UserControl
     /// <summary>Wird vom Host gesetzt (App-weit ein Erkenner).</summary>
     public InkRecognitionService? Erkennung { get; set; }
 
+    /// <summary>Wird vom Host gesetzt (KI-Anbindung, V2).</summary>
+    public KiService? Ki { get; set; }
+
     /// <summary>Feuert bei jeder inhaltlichen Änderung — Host macht Autosave-Debounce.</summary>
     public event Action? NotizGeaendert;
     /// <summary>Speichern-Button gedrückt.</summary>
@@ -321,6 +324,89 @@ public partial class NoteEditor : UserControl
     {
         if (((FrameworkElement)sender).DataContext is InkBlockVm ink)
             ink.Hoehe += e.VerticalChange;
+    }
+
+    // ---------- KI (V2) ----------
+
+    void Ki_Click(object sender, RoutedEventArgs e)
+    {
+        // Linksklick öffnet das Aktions-Menü unter dem Button
+        var menu = KiButton.ContextMenu!;
+        menu.PlacementTarget = KiButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    void KiAktion_Click(object sender, RoutedEventArgs e)
+    {
+        if (Ki is null || _note is null) return;
+        var aktion = Enum.Parse<KiAktion>((string)((MenuItem)sender).Tag);
+
+        var body = KiService.ErzeugeKiBody(_bloecke.Select<BlockVm, NoteBlock>(vm => vm switch
+        {
+            TextBlockVm t => t.ZuModel(),
+            InkBlockVm i => i.ZuModel(),
+            _ => throw new InvalidOperationException(),
+        }));
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            MessageBox.Show(Window.GetWindow(this)!,
+                "Die Notiz enthält noch keinen Text, den die KI verarbeiten könnte.",
+                "NotizApp", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new KiVorschlagWindow(Ki, aktion, body)
+        {
+            Owner = Window.GetWindow(this),
+        };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.Ergebnis))
+            return;
+        UebernehmeKiErgebnis(aktion, dialog.Ergebnis);
+    }
+
+    void UebernehmeKiErgebnis(KiAktion aktion, string text)
+    {
+        switch (aktion)
+        {
+            case KiAktion.Zusammenfassen:
+                // Zusammenfassung als neuen Block an den Anfang
+                var kopf = new TextBlockVm { Text = $"## Zusammenfassung\n\n{text}" };
+                RegistriereVm(kopf);
+                _bloecke.Insert(0, kopf);
+                break;
+
+            case KiAktion.Aufbereiten:
+                if (!_bloecke.OfType<InkBlockVm>().Any())
+                {
+                    // Reine Textnotiz: kompletten Text ersetzen
+                    foreach (var alt in _bloecke.OfType<TextBlockVm>().Skip(1).ToList())
+                        _bloecke.Remove(alt);
+                    _bloecke.OfType<TextBlockVm>().First().Text = text;
+                }
+                else
+                {
+                    // Mit Tinte: Original (inkl. Skizzen) behalten, Aufbereitung anhängen
+                    var neu = new TextBlockVm { Text = $"## Aufbereitet\n\n{text}" };
+                    RegistriereVm(neu);
+                    _bloecke.Add(neu);
+                }
+                break;
+
+            case KiAktion.Aufgaben:
+                if (text.Trim().Equals("keine", StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(Window.GetWindow(this)!,
+                        "Claude hat keine Aufgaben in der Notiz gefunden.",
+                        "NotizApp", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                var aufgaben = new TextBlockVm { Text = $"## Aufgaben\n\n{text}" };
+                RegistriereVm(aufgaben);
+                _bloecke.Add(aufgaben);
+                break;
+        }
+        MeldeAenderung();
     }
 
     // ---------- Handschrifterkennung ----------

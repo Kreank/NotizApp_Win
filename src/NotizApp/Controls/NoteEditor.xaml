@@ -159,6 +159,18 @@
                         ToolTip="Neue Handschrift-/Skizzenfläche am Ende einfügen"
                         Click="NeueTintenflaeche_Click"/>
 
+                <Button x:Name="KiButton" Style="{StaticResource WerkzeugButton}" Content="✨ KI"
+                        ToolTip="KI-Aufbereitung (sendet nur den Notiztext, keine Kundendaten)"
+                        Click="Ki_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="📋 Zusammenfassen" Tag="Zusammenfassen" Click="KiAktion_Click"/>
+                            <MenuItem Header="✏ Text aufbereiten" Tag="Aufbereiten" Click="KiAktion_Click"/>
+                            <MenuItem Header="☑ Aufgaben extrahieren" Tag="Aufgaben" Click="KiAktion_Click"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+
                 <Button Style="{StaticResource WerkzeugButton}" Content="💾 Speichern"
                         ToolTip="Speichern (Strg+S)" Click="Speichern_Click"/>
             </WrapPanel>

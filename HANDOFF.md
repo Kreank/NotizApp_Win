@@ -17,9 +17,20 @@ mehr nachfragen, einfach bauen. Danach Build + Startlauf verifizieren und Ergebn
   → Roundtrip beim Notizwechsel, Volltextsuche
 - ⚠️ Nicht real getestet (braucht echten Stift): Erkennungsqualität der Handschrift;
   Autostart-Registry-Eintrag (Code trivial, bewusst nicht im Test gesetzt)
-- ✅ Git-Repo initialisiert, **noch kein Commit**
-- 🔄 Docker + WSL2 wurden vom Nutzer installiert (V2-Basis) → bei Gelegenheit
-  `docker --version` / `wsl --status` prüfen
+- ✅ V1 committet (`1f9d972`)
+- ✅ Docker Desktop 29.6.1 + WSL2 laufen
+- ✅ **V2 (KI) implementiert:** `docker/claude/Dockerfile` + `docker/einrichten.ps1`,
+  `Services/KiService.cs` (docker run, Body via stdin, 3-Min-Timeout),
+  `KiVorschlagWindow` (Vorschlag editierbar, Übernehmen/Abbrechen),
+  ✨-Button im Editor (Zusammenfassen / Aufbereiten / Aufgaben extrahieren).
+  Übernahme: Zusammenfassung → Block oben; Aufbereiten → ersetzt Text (bzw. hängt
+  an, wenn Tinte in der Notiz); Aufgaben → Block unten. Container-Aufruf ohne
+  Login getestet (saubere Fehlermeldung mit Hinweis auf einrichten.ps1)
+- ⏳ **Nutzer muss einmalig `.\docker\einrichten.ps1` ausführen** (Claude-Login
+  im Container, landet im Volume `notizapp-claude-config`) — danach erster
+  echter End-to-End-Test der ✨-Funktionen
+- ⚠️ UI-Klicktest der V2-Oberfläche abgebrochen (Nutzer arbeitete aktiv am PC,
+  Maus-Simulation hätte gestört) — Code baut, Muster identisch zu V1
 
 ## Wichtige Umgebungs-Hinweise
 
