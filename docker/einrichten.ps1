@@ -1,4 +1,4 @@
-# Einmalige Einrichtung des Claude-Containers für die NotizApp-KI-Funktionen.
+﻿# Einmalige Einrichtung des Claude-Containers für die NotizApp-KI-Funktionen.
 # Ausführen in PowerShell:  .\docker\einrichten.ps1
 # Voraussetzung: Docker Desktop läuft.
 
