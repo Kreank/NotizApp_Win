@@ -394,7 +394,12 @@ public partial class NoteEditor : UserControl
                 break;
 
             case KiAktion.Aufgaben:
-                if (text.Trim().Equals("keine", StringComparison.OrdinalIgnoreCase))
+                // Defensiv: nur die Checkbox-Zeilen übernehmen, falls doch Drumherum-Text kommt
+                var zeilen = text.Replace("\r\n", "\n").Split('\n')
+                    .Where(z => z.TrimStart().StartsWith("- ["))
+                    .ToList();
+                if (zeilen.Count > 0) text = string.Join('\n', zeilen);
+                if (zeilen.Count == 0 || text.Trim().Equals("keine", StringComparison.OrdinalIgnoreCase))
                 {
                     MessageBox.Show(Window.GetWindow(this)!,
                         "Claude hat keine Aufgaben in der Notiz gefunden.",

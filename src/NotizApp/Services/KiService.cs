@@ -106,8 +106,9 @@ public class KiService
         var envDatei = Path.Combine(SettingsService.SettingsOrdner, "claude.env");
         var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
 
+        // Instruktion als System-Prompt (wird strikter befolgt), Notiz-Body via stdin
         var args = $"run --rm -i {envTeil}-v {ConfigVolume}:/home/claude {Image} " +
-                   $"-p {PsQuote(Instruktion(aktion))} --output-format text";
+                   $"-p --system-prompt {PsQuote(Instruktion(aktion))} --output-format text";
         var (code, stdout, stderr) = await StarteAsync("docker", args, body, ct, Zeitlimit);
 
         if (code != 0)
