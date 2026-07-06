@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using NotizApp.Models;
 
@@ -100,7 +101,12 @@ public class KiService
         if (string.IsNullOrWhiteSpace(body))
             throw new InvalidOperationException("Die Notiz enthält keinen Text für die KI.");
 
-        var args = $"run --rm -i -v {ConfigVolume}:/home/claude {Image} " +
+        // Anmelde-Token (von docker\einrichten.ps1 abgelegt) als --env-file mitgeben,
+        // damit er nicht auf der Kommandozeile sichtbar ist
+        var envDatei = Path.Combine(SettingsService.SettingsOrdner, "claude.env");
+        var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
+
+        var args = $"run --rm -i {envTeil}-v {ConfigVolume}:/home/claude {Image} " +
                    $"-p {PsQuote(Instruktion(aktion))} --output-format text";
         var (code, stdout, stderr) = await StarteAsync("docker", args, body, ct, Zeitlimit);
 
@@ -113,6 +119,13 @@ public class KiService
                 throw new InvalidOperationException(
                     "Claude ist im Container noch nicht angemeldet.\n\n" +
                     "Einmalig im Projektordner ausführen:\n    .\\docker\\einrichten.ps1");
+            }
+            if (fehler.Contains("Invalid bearer token", StringComparison.OrdinalIgnoreCase) ||
+                fehler.Contains("Failed to authenticate", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Der gespeicherte Claude-Token ist ungültig oder abgelaufen.\n\n" +
+                    "Bitte neu erzeugen:\n    .\\docker\\einrichten.ps1");
             }
             if (fehler.Length > 400) fehler = fehler[..400] + "…";
             throw new InvalidOperationException(
