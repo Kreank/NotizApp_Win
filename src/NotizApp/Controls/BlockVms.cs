@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Ink;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -73,7 +74,14 @@ public class InkBlockVm : BlockVm
             bmp.UriSource = new Uri(pfad);
             bmp.EndInit();
             bmp.Freeze();
-            Hintergrund = new ImageBrush(bmp) { Stretch = Stretch.Uniform };
+            // Immer weißes "Papier" unterlegen: transparente PNGs (Diagramme,
+            // Produktbilder mit schwarzer Schrift) wären im Dark Mode sonst unlesbar
+            var rect = new Rect(0, 0, bmp.PixelWidth, bmp.PixelHeight);
+            var gruppe = new DrawingGroup();
+            gruppe.Children.Add(new GeometryDrawing(Brushes.White, null, new RectangleGeometry(rect)));
+            gruppe.Children.Add(new ImageDrawing(bmp, rect));
+            gruppe.Freeze();
+            Hintergrund = new DrawingBrush(gruppe) { Stretch = Stretch.Uniform };
             // Beim ersten Einfügen sinnvolle Höhe wählen
             if (Math.Abs(_hoehe - 320) < 0.5 && bmp.PixelWidth > 0)
                 _hoehe = Math.Clamp(breiteHint * bmp.PixelHeight / bmp.PixelWidth, MinHoehe, 700);

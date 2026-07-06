@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Ink;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -184,8 +185,13 @@ public partial class NoteEditor : UserControl
     void Meta_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_initialisiert) return;
-        if (sender == DickeBox) { WendeWerkzeugAn(); return; }
         MeldeAenderung();
+    }
+
+    void DickeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_initialisiert) return;
+        WendeWerkzeugAn();
     }
 
     void Speichern_Click(object sender, RoutedEventArgs e) => SpeichernAngefordert?.Invoke();
@@ -195,7 +201,7 @@ public partial class NoteEditor : UserControl
     void Werkzeug_Checked(object sender, RoutedEventArgs e)
     {
         if (!_initialisiert) return;
-        foreach (var t in new[] { StiftToggle, MarkerToggle, RadiererToggle, LassoToggle })
+        foreach (var t in new[] { StiftToggle, MarkerToggle, RadiererToggle, PunktRadiererToggle, LassoToggle })
         {
             if (t != sender) t.IsChecked = false;
         }
@@ -205,34 +211,39 @@ public partial class NoteEditor : UserControl
     void Farbe_Click(object sender, RoutedEventArgs e)
     {
         _farbe = (string)((Button)sender).Tag;
-        StiftToggle.IsChecked = true; // Farbwahl aktiviert den Stift
+        // Farbwahl aktiviert den Stift — außer der Marker ist gerade aktiv (der färbt mit)
+        if (MarkerToggle.IsChecked != true)
+            StiftToggle.IsChecked = true;
         WendeWerkzeugAn();
     }
 
+    Color AktuelleFarbe() => _farbe == "auto"
+        ? (IstDunklesDesign() ? Colors.White : Colors.Black)
+        : (Color)ColorConverter.ConvertFromString(_farbe);
+
     DrawingAttributes AktuelleAttribute()
     {
-        double dicke = 2.2;
-        if ((DickeBox?.SelectedItem as ComboBoxItem)?.Tag is string d)
-            dicke = double.Parse(d, System.Globalization.CultureInfo.InvariantCulture);
+        double dicke = DickeSlider?.Value ?? 2.2;
 
         if (MarkerToggle.IsChecked == true)
         {
+            // Marker: eigene Farbe nur, wenn eine echte Farbe gewählt ist (auto = Gelb)
+            var markerFarbe = _farbe == "auto"
+                ? Color.FromArgb(255, 255, 210, 0)
+                : AktuelleFarbe();
             return new DrawingAttributes
             {
-                Color = Color.FromArgb(255, 255, 210, 0),
+                Color = markerFarbe,
                 IsHighlighter = true,
-                Width = dicke * 5,
-                Height = dicke * 10,
+                Width = dicke * 4,
+                Height = dicke * 8,
                 StylusTip = StylusTip.Rectangle,
             };
         }
 
-        var farbe = _farbe == "auto"
-            ? (IstDunklesDesign() ? Colors.White : Colors.Black)
-            : (Color)ColorConverter.ConvertFromString(_farbe);
         return new DrawingAttributes
         {
-            Color = farbe,
+            Color = AktuelleFarbe(),
             Width = dicke,
             Height = dicke,
             FitToCurve = true,
@@ -253,6 +264,7 @@ public partial class NoteEditor : UserControl
     InkCanvasEditingMode AktuellerModus()
     {
         if (RadiererToggle.IsChecked == true) return InkCanvasEditingMode.EraseByStroke;
+        if (PunktRadiererToggle.IsChecked == true) return InkCanvasEditingMode.EraseByPoint;
         if (LassoToggle.IsChecked == true) return InkCanvasEditingMode.Select;
         if (StiftToggle.IsChecked == true || MarkerToggle.IsChecked == true)
             return InkCanvasEditingMode.Ink;
@@ -263,19 +275,36 @@ public partial class NoteEditor : UserControl
     {
         var da = AktuelleAttribute();
         var modus = AktuellerModus();
+        var radiererGroesse = Math.Max(4, (DickeSlider?.Value ?? 2.2) * 3);
         foreach (var canvas in _canvases)
+            WendeWerkzeugAn(canvas, da, modus, radiererGroesse);
+
+        // Vorschau-Punkt in der Werkzeugleiste aktualisieren
+        if (VorschauPunkt is not null)
         {
-            canvas.EditingMode = modus;
-            canvas.DefaultDrawingAttributes = da.Clone();
+            var d = Math.Clamp(da.Width, 3, 20);
+            VorschauPunkt.Width = d;
+            VorschauPunkt.Height = d;
+            VorschauPunkt.Fill = new SolidColorBrush(da.Color);
         }
+    }
+
+    static void WendeWerkzeugAn(InkCanvas canvas, DrawingAttributes da,
+        InkCanvasEditingMode modus, double radiererGroesse)
+    {
+        // EraserShape greift erst nach einem EditingMode-Wechsel (WPF-Eigenheit)
+        canvas.EditingMode = InkCanvasEditingMode.None;
+        canvas.EraserShape = new EllipseStylusShape(radiererGroesse, radiererGroesse);
+        canvas.DefaultDrawingAttributes = da.Clone();
+        canvas.EditingMode = modus;
     }
 
     void InkCanvas_Loaded(object sender, RoutedEventArgs e)
     {
         var canvas = (InkCanvas)sender;
         if (!_canvases.Contains(canvas)) _canvases.Add(canvas);
-        canvas.EditingMode = AktuellerModus();
-        canvas.DefaultDrawingAttributes = AktuelleAttribute();
+        WendeWerkzeugAn(canvas, AktuelleAttribute(), AktuellerModus(),
+            Math.Max(4, (DickeSlider?.Value ?? 2.2) * 3));
     }
 
     void InkCanvas_Unloaded(object sender, RoutedEventArgs e) =>
