@@ -545,6 +545,21 @@ public partial class MainWindow : Window
         Editor.UebernehmeInNote();
         _store.Speichere(_aktuelleNotiz);
         AktualisiereSidebar(); // Tag-/Zähler-Änderungen
+
+        // Anhang-Suchindex (PDF-Text + Bild-OCR) der Notiz im Hintergrund nachziehen
+        var notiz = _aktuelleNotiz;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await AnhangIndexService.Instanz.IndiziereAsync(
+                    new[] { notiz }, CancellationToken.None);
+            }
+            catch
+            {
+                // Suche funktioniert auch ohne Anhang-Index
+            }
+        });
     }
 
     void ZeigeEditorHinweis() =>

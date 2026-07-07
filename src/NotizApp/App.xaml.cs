@@ -69,6 +69,21 @@ public partial class App : Application
         Templates.LadeEigene(_settings.Aktuell.DataFolder);
         _erkennung = new InkRecognitionService();
 
+        // Anhang-Suchindex (PDF-Text + Bild-OCR) im Hintergrund aufbauen —
+        // darf den Start nie blockieren und nie crashen
+        var notizen = _store.Notizen.ToList();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await AnhangIndexService.Instanz.IndiziereAsync(notizen, CancellationToken.None);
+            }
+            catch
+            {
+                // Suche funktioniert auch ohne Anhang-Index
+            }
+        });
+
         // ---- Tray ----
         _tray = new TrayService();
         _tray.OeffnenGeklickt += ZeigeHauptfenster;

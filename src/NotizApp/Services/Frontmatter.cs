@@ -221,6 +221,12 @@ public static partial class Frontmatter
                         Hoehe = Zahl("h", 96),
                         Seite = (int)Zahl("seite", 0),
                     },
+                    "link" => new LinkElement
+                    {
+                        Url = attrs.GetValueOrDefault("url", ""),
+                        Titel = attrs.GetValueOrDefault("titel", ""),
+                        Hoehe = Zahl("h", 76),
+                    },
                     "tabelle" => new TabelleElement
                     {
                         SpaltenBreiten = ZahlListe(attrs.GetValueOrDefault("sb")),
@@ -506,6 +512,13 @@ public static partial class Frontmatter
                     sb.Append($"<!--el datei {pos} h={(int)d.Hoehe} datei=\"{d.Datei}\"");
                     if (d.Seite > 0) sb.Append($" seite={d.Seite}");
                     sb.Append("-->\n\n");
+                    break;
+                case LinkElement l:
+                    // Anführungszeichen würden den Attribut-Parser brechen → ersetzen
+                    var titel = Bereinige(l.Titel).Replace('"', '\'');
+                    if (titel.Length > 200) titel = titel[..200];
+                    var url = Bereinige(l.Url).Replace('"', '\'');
+                    sb.Append($"<!--el link {pos} h={(int)l.Hoehe} url=\"{url}\" titel=\"{titel}\"-->\n\n");
                     break;
                 case TabelleElement tab when tab.Zeilen.Count > 0:
                     sb.Append($"<!--el tabelle {pos}");

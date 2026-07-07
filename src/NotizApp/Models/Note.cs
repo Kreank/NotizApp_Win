@@ -65,6 +65,14 @@ public class DateiElement : NoteElement
     public int Seite { get; set; }
 }
 
+/// <summary>Web-Link als Karte auf der Fläche (aus dem Browser gezogen).</summary>
+public class LinkElement : NoteElement
+{
+    public string Url { get; set; } = "";
+    public string Titel { get; set; } = "";
+    public double Hoehe { get; set; } = 76;
+}
+
 /// <summary>Tabelle auf der Fläche: Zeilen mit Textzellen, erste Zeile ist die
 /// Kopfzeile. In der .md-Datei als Markdown-Tabelle gespeichert.</summary>
 public class TabelleElement : NoteElement
@@ -108,6 +116,8 @@ public class Note : INotifyPropertyChanged
     public StrokeCollection? Tinte { get; set; }
     /// <summary>Im Hintergrund erkannter Text der Handschrift (für Suche + KI).</summary>
     public string TintenText { get; set; } = "";
+    /// <summary>Im Hintergrund extrahierter Text der Anhänge (PDF-Text + Bild-OCR, für die Suche).</summary>
+    public string AnhangText { get; set; } = "";
 
     /// <summary>Gespeicherte Höhe der Fläche (wächst beim Schreiben mit).</summary>
     public double FlaecheHoehe { get; set; } = 900;
@@ -200,7 +210,10 @@ public class Note : INotifyPropertyChanged
         }
         foreach (var d in Elemente.OfType<DateiElement>())
             sb.AppendLine(d.Datei);
+        foreach (var l in Elemente.OfType<LinkElement>())
+            sb.AppendLine($"{l.Titel} {l.Url}");
         sb.AppendLine(TintenText);
+        sb.AppendLine(AnhangText);
         VolltextCache = sb.ToString().ToLowerInvariant();
     }
 }

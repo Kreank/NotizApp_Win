@@ -328,6 +328,69 @@ public class DateiElementVm : ElementVm
     }
 }
 
+/// <summary>Web-Clip-Karte: aus dem Browser gezogener Link. Doppelklick öffnet
+/// die Seite im Browser; „⬇ PDF" sichert sie als PDF neben der Notiz.</summary>
+public class LinkElementVm : ElementVm
+{
+    public const double MinHoehe = 48;
+
+    string _url = "";
+    public string Url
+    {
+        get => _url;
+        set
+        {
+            if (_url == value) return;
+            _url = value;
+            OnChanged();
+            OnChanged(nameof(Domain));
+            MeldeGeaendert();
+        }
+    }
+
+    string _titel = "";
+    public string Titel
+    {
+        get => _titel;
+        set
+        {
+            if (_titel == value) return;
+            _titel = value;
+            OnChanged();
+            MeldeGeaendert();
+        }
+    }
+
+    /// <summary>Host der URL (z.B. "www.vaillant.de") — Untertitel der Karte.</summary>
+    public string Domain =>
+        Uri.TryCreate(_url, UriKind.Absolute, out var uri) ? uri.Host : "";
+
+    double _hoehe = 76;
+    public double Hoehe
+    {
+        get => _hoehe;
+        set { if (Setze(ref _hoehe, Math.Max(MinHoehe, value))) MeldeGeaendert(); }
+    }
+
+    public override double Unterkante => Y + Hoehe;
+
+    public LinkElementVm() { }
+    public LinkElementVm(LinkElement el)
+    {
+        X = el.X; Y = el.Y; Breite = el.Breite;
+        _url = el.Url;
+        _titel = el.Titel;
+        _hoehe = Math.Max(MinHoehe, el.Hoehe);
+    }
+
+    public override NoteElement ZuModel()
+    {
+        var el = new LinkElement { Url = Url, Titel = Titel, Hoehe = Hoehe };
+        UebernehmePosition(el);
+        return el;
+    }
+}
+
 /// <summary>Eine Zelle der Tabelle: editierbarer Text — oder ein Bild, wenn der
 /// Text Markdown-Bildsyntax ist ("![](datei.png)", Datei liegt neben der Notiz).</summary>
 public class ZelleVm : INotifyPropertyChanged

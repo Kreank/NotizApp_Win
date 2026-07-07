@@ -144,6 +144,7 @@ public partial class NoteEditor : UserControl
                     TextElement t => new TextElementVm(t),
                     BildElement b => new BildElementVm(b),
                     DateiElement d => new DateiElementVm(d),
+                    LinkElement l => new LinkElementVm(l),
                     TabelleElement tab => new TabelleElementVm(tab),
                     _ => throw new InvalidOperationException(),
                 };
@@ -962,16 +963,251 @@ public partial class NoteEditor : UserControl
 
     void Flaeche_Drop(object sender, DragEventArgs e)
     {
-        if (_note is null || !e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        if (_note is null) return;
         var punkt = e.GetPosition(Flaeche);
-        double y = punkt.Y;
-        foreach (var datei in (string[])e.Data.GetData(DataFormats.FileDrop))
+
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
-            if (!System.IO.File.Exists(datei)) continue;
-            FuegeDateiObjektAn(KopiereAnhang(datei), Math.Max(0, punkt.X), Math.Max(0, y));
-            y += 40; // mehrere Dateien leicht versetzt stapeln
+            double y = punkt.Y;
+            foreach (var datei in (string[])e.Data.GetData(DataFormats.FileDrop))
+            {
+                if (!System.IO.File.Exists(datei)) continue;
+                FuegeDateiObjektAn(KopiereAnhang(datei), Math.Max(0, punkt.X), Math.Max(0, y));
+                y += 40; // mehrere Dateien leicht versetzt stapeln
+            }
+            MeldeAenderung();
+            return;
+        }
+
+        // Kein FileDrop: Link aus dem Browser (Text oder URL-Format) → Web-Clip-Karte
+        var text = HoleDropText(e.Data)?.Trim();
+        if (text is null) return;
+        if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var vm = new LinkElementVm
+        {
+            Url = text,
+            X = Math.Max(0, punkt.X),
+            Y = Math.Max(0, punkt.Y),
+            Breite = 320,
+        };
+        vm.Titel = vm.Domain.Length > 0 ? vm.Domain : text; // bis der echte Titel geladen ist
+        FuegeElementHinzu(vm);
+        PasseHoeheAn();
+        MeldeAenderung();
+        _ = LadeLinkTitelAsync(vm);
+    }
+
+    /// <summary>Text/URL aus einem DataObject holen (Browser liefern beides).</summary>
+    static string? HoleDropText(IDataObject data)
+    {
+        try
+        {
+            if (data.GetDataPresent(DataFormats.UnicodeText) &&
+                data.GetData(DataFormats.UnicodeText) is string s &&
+                s.Trim().Length > 0)
+            {
+                return s;
+            }
+            if (data.GetDataPresent("UniformResourceLocatorW") &&
+                data.GetData("UniformResourceLocatorW") is System.IO.MemoryStream ms)
+            {
+                return System.Text.Encoding.Unicode
+                    .GetString(ms.ToArray()).TrimEnd('\0');
+            }
+        }
+        catch
+        {
+            // fremde Drop-Quellen können sich beliebig verhalten → kein Clip
+        }
+        return null;
+    }
+
+    /// <summary>Ein Client für alle Titel-Abfragen (kurzes Timeout, eigener User-Agent).</summary>
+    static readonly System.Net.Http.HttpClient LinkHttp = ErzeugeLinkHttp();
+
+    static System.Net.Http.HttpClient ErzeugeLinkHttp()
+    {
+        var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NotizApp/1.0");
+        return client;
+    }
+
+    /// <summary>Seitentitel der Link-Karte asynchron nachladen (Fehler → Domain bleibt).</summary>
+    async Task LadeLinkTitelAsync(LinkElementVm vm)
+    {
+        try
+        {
+            var html = await LinkHttp.GetStringAsync(vm.Url);
+            var m = System.Text.RegularExpressions.Regex.Match(html,
+                @"<title[^>]*>\s*(.*?)\s*</title>",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (!m.Success) return;
+            var titel = System.Net.WebUtility.HtmlDecode(m.Groups[1].Value);
+            titel = System.Text.RegularExpressions.Regex.Replace(titel, @"\s+", " ").Trim();
+            if (titel.Length > 200) titel = titel[..200];
+            if (titel.Length > 0) vm.Titel = titel;
+        }
+        catch
+        {
+            // Seite nicht erreichbar/kein HTML → Domain bleibt als Titel stehen
         }
         MeldeAenderung();
+    }
+
+    /// <summary>Doppelklick auf die Link-Karte: Seite im Standard-Browser öffnen.</summary>
+    void LinkElement_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2 || _note is null) return;
+        if (IstInButton(e.OriginalSource)) return; // Doppelklick auf 🗑/⬇ PDF öffnet nicht
+        if (VmVon<LinkElementVm>(sender) is not { } vm) return;
+        var url = vm.Url.Trim();
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return; // nur echte Web-Adressen öffnen
+        }
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            MessageBox.Show(Window.GetWindow(this)!,
+                "Der Link konnte nicht im Browser geöffnet werden.",
+                "NotizApp", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        e.Handled = true;
+    }
+
+    void LinkGroesse_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (VmVon<LinkElementVm>(sender) is not { } vm) return;
+        vm.Breite += e.HorizontalChange;
+        vm.Hoehe += e.VerticalChange;
+        PasseHoeheAn();
+    }
+
+    /// <summary>msedge.exe suchen: App-Paths-Registry, sonst Standard-Installationspfade.</summary>
+    static string? FindeEdge()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe");
+            if (key?.GetValue(null) is string pfad && System.IO.File.Exists(pfad))
+                return pfad;
+        }
+        catch
+        {
+            // kein Registry-Zugriff → Standardpfade probieren
+        }
+        foreach (var basis in new[]
+        {
+            Environment.GetEnvironmentVariable("ProgramFiles(x86)"),
+            Environment.GetEnvironmentVariable("ProgramFiles"),
+        })
+        {
+            if (string.IsNullOrWhiteSpace(basis)) continue;
+            var pfad = System.IO.Path.Combine(basis, "Microsoft", "Edge", "Application", "msedge.exe");
+            if (System.IO.File.Exists(pfad)) return pfad;
+        }
+        return null;
+    }
+
+    /// <summary>„⬇ PDF": Seite headless mit Edge drucken und als Datei-Objekt
+    /// neben die Link-Karte legen.</summary>
+    async void LinkPdf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_note is null || sender is not Button knopf) return;
+        if (VmVon<LinkElementVm>(sender) is not { } vm) return;
+        var url = vm.Url.Trim();
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var edge = FindeEdge();
+        if (edge is null)
+        {
+            MessageBox.Show(Window.GetWindow(this)!,
+                "Edge wurde nicht gefunden.",
+                "NotizApp", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var alterInhalt = knopf.Content;
+        knopf.Content = "⌛";
+        knopf.IsEnabled = false;
+        string? temp = null;
+        try
+        {
+            var domain = vm.Domain.Length > 0 ? vm.Domain : "seite";
+            foreach (var c in System.IO.Path.GetInvalidFileNameChars())
+                domain = domain.Replace(c, '-');
+            temp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"clip-{domain}.pdf");
+            try { System.IO.File.Delete(temp); } catch { }
+
+            var psi = new System.Diagnostics.ProcessStartInfo(edge,
+                $"--headless --disable-gpu --print-to-pdf=\"{temp}\" --print-to-pdf-no-header \"{url}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using (var prozess = System.Diagnostics.Process.Start(psi))
+            {
+                if (prozess is not null)
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                    try
+                    {
+                        await prozess.WaitForExitAsync(cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        try { prozess.Kill(entireProcessTree: true); } catch { }
+                    }
+                }
+            }
+
+            if (_note is not null && System.IO.File.Exists(temp) &&
+                new System.IO.FileInfo(temp).Length > 0)
+            {
+                FuegeDateiObjektAn(KopiereAnhang(temp), vm.X + vm.Breite + 16, vm.Y);
+                MeldeAenderung();
+            }
+            else
+            {
+                MessageBox.Show(Window.GetWindow(this)!,
+                    "Die Seite konnte nicht als PDF gesichert werden.",
+                    "NotizApp", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch
+        {
+            MessageBox.Show(Window.GetWindow(this)!,
+                "Die Seite konnte nicht als PDF gesichert werden.",
+                "NotizApp", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            if (temp is not null)
+            {
+                try { System.IO.File.Delete(temp); } catch { }
+            }
+            knopf.Content = alterInhalt;
+            knopf.IsEnabled = true;
+        }
     }
 
     /// <summary>KI-erzeugte Dateien übernehmen: alles als Objekte auf die Fläche.</summary>

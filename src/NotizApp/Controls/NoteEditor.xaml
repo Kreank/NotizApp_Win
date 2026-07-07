@@ -352,6 +352,59 @@
                 </MultiDataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+        <!-- ===== Link-Element (Web-Clip-Karte) ===== -->
+        <DataTemplate DataType="{x:Type local:LinkElementVm}">
+            <Grid Width="{Binding Breite}" Height="{Binding Hoehe}" Background="Transparent"
+                  PreviewMouseLeftButtonDown="LinkElement_MouseDown">
+                <Border Background="{DynamicResource AppFlaecheBrush}"
+                        CornerRadius="6" BorderThickness="1"
+                        BorderBrush="{DynamicResource AppRandBrush}"
+                        Padding="8" ToolTip="Doppelklick: Link im Browser öffnen">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" Text="🔗" FontSize="22"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Titel}" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" MaxHeight="38"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource AppTextBrush}"/>
+                            <TextBlock Text="{Binding Domain}" FontSize="11" Margin="0,2,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <!-- Ganzflächiger Griff: im Auswahl-Modus direkt anfassbar -->
+                <Thumb Cursor="SizeAll" DragDelta="ElementVerschieben_DragDelta">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border Background="Transparent"/>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+                <Button x:Name="Loeschen" Content="🗑" Opacity="0"
+                        Style="{StaticResource LoeschKnopf}"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
+                        Click="ElementLoeschen_Click"/>
+                <Button x:Name="PdfKnopf" Content="⬇ PDF" Opacity="0" FontSize="11"
+                        Style="{StaticResource LoeschKnopf}"
+                        ToolTip="Seite als PDF neben der Notiz sichern"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Margin="4,4,20,4" Click="LinkPdf_Click"/>
+                <Thumb x:Name="EckGriff" Width="14" Height="14" Opacity="0"
+                       Cursor="SizeNWSE" ToolTip="Größe ziehen"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                       Template="{StaticResource LeiseGriffTemplate}"
+                       DragDelta="LinkGroesse_DragDelta"/>
+            </Grid>
+            <DataTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Loeschen" Property="Opacity" Value="1"/>
+                    <Setter TargetName="PdfKnopf" Property="Opacity" Value="1"/>
+                    <Setter TargetName="EckGriff" Property="Opacity" Value="0.8"/>
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
