@@ -73,6 +73,8 @@ public partial class MainWindow : Window
         BaueNeueNotizMenu();
         NotizListe.ContextMenuOpening += NotizListe_ContextMenuOpening;
 
+        Loaded += (_, _) => StarteGlowAnimation();
+
         NotizbuchFarben.Setze(settings.Aktuell.NotizbuchFarben);
         AktualisiereSidebar();
         AktualisiereListe();
@@ -634,6 +636,32 @@ public partial class MainWindow : Window
     }
 
     void ChatBubble_Click(object sender, RoutedEventArgs e) => SetzeChatSichtbar(!_chatOffen);
+
+    // ---------- Hintergrund-Animation („Kupfer & Wasser") ----------
+
+    /// <summary>Die zwei Licht-Schimmer sehr langsam treiben lassen — dezent,
+    /// GPU-günstig (nur Positions-Animationen) und aus, wenn Windows
+    /// Animationen deaktiviert hat.</summary>
+    void StarteGlowAnimation()
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+
+        static System.Windows.Media.Animation.DoubleAnimation Treiben(
+            double von, double bis, int sekunden) => new(von, bis, TimeSpan.FromSeconds(sekunden))
+        {
+            AutoReverse = true,
+            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            EasingFunction = new System.Windows.Media.Animation.SineEase
+            {
+                EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut,
+            },
+        };
+
+        GlowWasser.BeginAnimation(Canvas.LeftProperty, Treiben(-280, 40, 55));
+        GlowWasser.BeginAnimation(Canvas.TopProperty, Treiben(-320, -120, 70));
+        GlowKupfer.BeginAnimation(Canvas.RightProperty, Treiben(-240, -40, 65));
+        GlowKupfer.BeginAnimation(Canvas.BottomProperty, Treiben(-280, -90, 50));
+    }
 
     void ChatTextEinfuegen(string text)
     {

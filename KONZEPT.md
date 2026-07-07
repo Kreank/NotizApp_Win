@@ -151,7 +151,15 @@ Volltextsuche über:
 ## 9. Erscheinungsbild
 
 - Win11 Fluent Design (Mica-Optik, abgerundete Ecken)
-- **Hell/Dunkel folgt automatisch der Windows-Einstellung**
+- **Hell/Dunkel folgt automatisch der Windows-Einstellung** — auch zur Laufzeit
+- **Farbsystem „Kupfer & Wasser"** (`Services/Farbschema.cs`): Petrol als Akzent
+  (Wasser), Kupfer als warmer Zweitton (Rohr/Wärme), transluzente Glas-Flächen.
+  Alle Texte/Flächen hängen an semantischen App-Brushes (AppText, AppFlaeche,
+  AppAkzent, …) statt an den SystemColors-Schlüsseln, die unter dem
+  Fluent-Theme nicht zuverlässig hell/dunkel mitwechseln
+- **Signatur:** zwei sehr langsam treibende Licht-Schimmer (Petrol oben links,
+  Kupfer unten rechts) hinter allen Inhalten — dezent, GPU-günstig, aus wenn
+  Windows-Animationen deaktiviert sind
 
 ## 10. Roadmap
 

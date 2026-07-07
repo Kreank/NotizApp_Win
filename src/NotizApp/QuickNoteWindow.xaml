@@ -65,7 +65,7 @@
         <!-- Stift -->
         <Expander Header="✍ Stift" Margin="0,8,0,0">
             <Border BorderThickness="1" CornerRadius="4" Margin="0,6,0,0"
-                    BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+                    BorderBrush="{DynamicResource AppRandBrush}">
                 <InkCanvas x:Name="TintenFlaeche" Height="200" Background="Transparent"/>
             </Border>
         </Expander>

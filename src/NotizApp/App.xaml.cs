@@ -30,6 +30,10 @@ public partial class App : Application
         base.OnStartup(e);
         bool trayStart = e.Args.Contains("--tray");
 
+        // Farbsystem „Kupfer & Wasser" anwenden und bei Theme-Wechsel nachziehen
+        Farbschema.Anwenden(Resources);
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += Theme_Geaendert;
+
         // ---- Single Instance ----
         _mutex = new Mutex(true, MutexName, out bool erste);
         _zeigenEvent = new EventWaitHandle(false, EventResetMode.AutoReset, EventName);
@@ -138,8 +142,15 @@ public partial class App : Application
         Shutdown();
     }
 
+    void Theme_Geaendert(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category == Microsoft.Win32.UserPreferenceCategory.General)
+            Dispatcher.BeginInvoke(() => Farbschema.Anwenden(Resources));
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged -= Theme_Geaendert;
         _zeigenWait?.Unregister(null);
         _hotkey?.Dispose();
         _tray?.Dispose();

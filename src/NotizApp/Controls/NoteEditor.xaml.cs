@@ -488,7 +488,7 @@ public partial class NoteEditor : UserControl
     }
 
     Color AktuelleFarbe() => _farbe == "auto"
-        ? (IstDunklesDesign() ? Colors.White : Colors.Black)
+        ? (Farbschema.IstDunkel() ? Colors.White : Colors.Black)
         : (Color)ColorConverter.ConvertFromString(_farbe);
 
     DrawingAttributes AktuelleAttribute()
@@ -518,17 +518,6 @@ public partial class NoteEditor : UserControl
             Height = dicke,
             FitToCurve = true,
         };
-    }
-
-    static bool IstDunklesDesign()
-    {
-        try
-        {
-            return Registry.GetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                "AppsUseLightTheme", 1) is int v && v == 0;
-        }
-        catch { return false; }
     }
 
     InkCanvasEditingMode AktuellerModus()
@@ -933,7 +922,7 @@ public partial class NoteEditor : UserControl
             .Select(g => (Color?)g.Key)
             .FirstOrDefault();
         if (farbe is not Color c) return null;
-        var auto = IstDunklesDesign() ? Colors.White : Colors.Black;
+        var auto = Farbschema.IstDunkel() ? Colors.White : Colors.Black;
         return c == auto ? null : $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     }
 }

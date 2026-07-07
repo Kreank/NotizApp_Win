@@ -22,21 +22,21 @@
         <!-- Textfeld eines Text-Elements: Farbe aus dem VM, sonst Design-Farbe -->
         <Style x:Key="ElementTextBox" TargetType="TextBox" BasedOn="{StaticResource RahmenlosTextBox}">
             <Setter Property="Foreground" Value="{Binding FarbBrush}"/>
-            <Setter Property="CaretBrush"
-                    Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource AppTextBrush}"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding FarbBrush}" Value="{x:Null}">
-                    <Setter Property="Foreground"
-                            Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
         <!-- Verschiebe-Griff (⠿) über jedem Element -->
         <ControlTemplate x:Key="GriffTemplate" TargetType="Thumb">
-            <Border Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+            <Border Background="{DynamicResource AppFlaecheBrush}"
+                    BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
                     CornerRadius="3" Padding="6,0">
                 <TextBlock Text="⠿" FontSize="10" Opacity="0.7"
+                           Foreground="{DynamicResource AppTextBrush}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </ControlTemplate>
@@ -44,7 +44,7 @@
         <!-- Unsichtbarer Größen-Griff (Kante/Ecke) -->
         <ControlTemplate x:Key="LeiseGriffTemplate" TargetType="Thumb">
             <Border Background="Transparent">
-                <Border Background="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                <Border Background="{DynamicResource AppTextLeiseBrush}"
                         CornerRadius="2" Margin="2" Opacity="0.5"/>
             </Border>
         </ControlTemplate>
@@ -90,11 +90,11 @@
                     <Setter TargetName="Griff" Property="Opacity" Value="1"/>
                     <Setter TargetName="BreiteGriff" Property="Opacity" Value="0.7"/>
                     <Setter TargetName="Rahmen" Property="BorderBrush"
-                            Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"/>
+                            Value="{DynamicResource AppRandBrush}"/>
                 </Trigger>
                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
                     <Setter TargetName="Rahmen" Property="BorderBrush"
-                            Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                            Value="{DynamicResource AppAkzentBrush}"/>
                 </Trigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -104,7 +104,7 @@
             <Grid Width="{Binding Breite}" Height="{Binding Hoehe}" Background="Transparent">
                 <Border Background="{Binding Hintergrund}" CornerRadius="2"
                         BorderThickness="1"
-                        BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"/>
+                        BorderBrush="{DynamicResource AppRandBrush}"/>
                 <!-- Ganzflächiger Griff: im Auswahl-Modus direkt anfassbar -->
                 <Thumb Cursor="SizeAll" DragDelta="ElementVerschieben_DragDelta">
                     <Thumb.Template>
@@ -135,9 +135,9 @@
         <DataTemplate DataType="{x:Type local:DateiElementVm}">
             <Grid Width="{Binding Breite}" Height="{Binding Hoehe}" Background="Transparent"
                   PreviewMouseLeftButtonDown="DateiElement_MouseDown">
-                <Border Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                <Border Background="{DynamicResource AppFlaecheBrush}"
                         CornerRadius="6" BorderThickness="1"
-                        BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                        BorderBrush="{DynamicResource AppRandBrush}"
                         Padding="8" ToolTip="Doppelklick: Datei öffnen">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}"
@@ -206,7 +206,7 @@
             <TextBlock Text="🏷" DockPanel.Dock="Left" VerticalAlignment="Center"
                        Margin="0,0,6,0" Opacity="0.6"/>
             <TextBox x:Name="TagsBox" Style="{StaticResource RahmenlosTextBox}"
-                     FontSize="13" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                     FontSize="13" Foreground="{DynamicResource AppTextLeiseBrush}"
                      TextChanged="Meta_TextChanged"
                      ToolTip="Tags durch Komma getrennt, z.B.: notfall, heizung"/>
         </DockPanel>
@@ -266,8 +266,9 @@
         </Expander>
 
         <!-- Werkzeugleiste -->
-        <Border Grid.Row="3" Margin="16,10,16,6" Padding="6,4" CornerRadius="6"
-                Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+        <Border Grid.Row="3" Margin="16,10,16,6" Padding="6,4" CornerRadius="8"
+                Background="{DynamicResource AppFlaecheBrush}"
+                BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1">
             <WrapPanel VerticalAlignment="Center">
                 <ToggleButton x:Name="FokusToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="⛶" ToolTip="Fokus-Modus: Seitenleisten ein-/ausklappen (F11)"

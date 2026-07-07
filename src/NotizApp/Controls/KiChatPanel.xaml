@@ -5,9 +5,10 @@
     <UserControl.Resources>
         <!-- Sprechblase: Claude links neutral, eigene Nachrichten rechts akzentuiert -->
         <DataTemplate DataType="{x:Type local:ChatNachricht}">
-            <Border x:Name="Blase" Margin="0,4" Padding="10,8" CornerRadius="8"
+            <Border x:Name="Blase" Margin="0,4" Padding="10,8" CornerRadius="10"
                     MaxWidth="520" HorizontalAlignment="Left"
-                    Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                    BorderThickness="1" BorderBrush="{DynamicResource AppRandBrush}"
+                    Background="{DynamicResource AppFlaecheBrush}">
                 <StackPanel>
                     <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True"
                              BorderThickness="0" Background="Transparent" Padding="0"
@@ -16,7 +17,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Margin="0,2" Padding="6,4" CornerRadius="4"
-                                        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                                        Background="{DynamicResource AppFlaecheTiefBrush}">
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Content="💾"
                                                 ToolTip="Auf dem PC speichern unter…"
@@ -44,7 +45,8 @@
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding VonMir}" Value="True">
                     <Setter TargetName="Blase" Property="HorizontalAlignment" Value="Right"/>
-                    <Setter TargetName="Blase" Property="Background" Value="#333B78D8"/>
+                    <Setter TargetName="Blase" Property="Background"
+                            Value="{DynamicResource AppAkzentLeiseBrush}"/>
                 </DataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
@@ -71,8 +73,9 @@
         </DockPanel>
 
         <!-- Eingabe -->
-        <Border DockPanel.Dock="Bottom" Padding="6" CornerRadius="6"
-                Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+        <Border DockPanel.Dock="Bottom" Padding="6" CornerRadius="8"
+                BorderThickness="1" BorderBrush="{DynamicResource AppRandBrush}"
+                Background="{DynamicResource AppFlaecheBrush}">
             <DockPanel>
                 <CheckBox x:Name="KontextCheck" DockPanel.Dock="Top" Margin="0,0,0,6"
                           Content="Aktuelle Notiz mitgeben" FontSize="11" IsChecked="True"

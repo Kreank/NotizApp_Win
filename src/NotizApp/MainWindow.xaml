@@ -28,6 +28,19 @@
             <ColumnDefinition x:Name="ChatSpalte" Width="0"/>
         </Grid.ColumnDefinitions>
 
+        <!-- „Kupfer & Wasser": zwei sehr langsam treibende Licht-Schimmer hinter
+             allen Inhalten (Animation startet im Code-Behind, respektiert die
+             Windows-Animationseinstellung) -->
+        <Canvas x:Name="GlowEbene" Grid.ColumnSpan="7" IsHitTestVisible="False"
+                ClipToBounds="True">
+            <Ellipse x:Name="GlowWasser" Width="820" Height="820"
+                     Canvas.Left="-280" Canvas.Top="-320"
+                     Fill="{DynamicResource AppGlowWasserBrush}"/>
+            <Ellipse x:Name="GlowKupfer" Width="680" Height="680"
+                     Canvas.Right="-240" Canvas.Bottom="-280"
+                     Fill="{DynamicResource AppGlowKupferBrush}"/>
+        </Canvas>
+
         <!-- ===== Sidebar ===== -->
         <DockPanel x:Name="SidebarPanel" Grid.Column="0" Margin="10,10,4,10">
             <DockPanel DockPanel.Dock="Top">
@@ -215,7 +228,7 @@
                     <ControlTemplate TargetType="Button">
                         <Grid>
                             <Ellipse x:Name="Kreis"
-                                     Fill="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}">
+                                     Fill="{DynamicResource AppAkzentBrush}">
                                 <Ellipse.Effect>
                                     <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.35"/>
                                 </Ellipse.Effect>
