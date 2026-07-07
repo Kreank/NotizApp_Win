@@ -11,11 +11,11 @@ als offenes Markdown mit Frontmatter plus einer Tinten-ISF daneben.
   Formen-Werkzeug (Rechtecke, Kreise, Pfeile, Linien), Stift-Seitentaste radiert
 - **Dashboard:** Monatskalender mit Terminen aus den Notizen, News-Feed
   (KI + SHK-Branche) per KI-Recherche
-- **KI-Anbindung:** Claude läuft headless in einem Docker-Container —
+- **KI-Anbindung:** 
   Zusammenfassen, Berichte/Dateien erstellen, Chat mit Notiz-Kontext.
   Kundendaten-Kopf und Titel verlassen den PC nie; Anhänge nur per Opt-in
-- **Bildgenerierung** über die lokale Codex-App, **Sprach-Transkription**
-  lokal per Whisper (Mikrofon + Systemton)
+- **Bildgenerierung**
+- **Sprach-Transkription**
 - **Suche:** Volltext über Notizen, erkannte Handschrift, PDF-Inhalte und
   Bildtexte (Windows-OCR)
 - Notizbücher mit Unterordnern, eigene Vorlagen, Schnellerfassung per
