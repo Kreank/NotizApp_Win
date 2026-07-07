@@ -221,7 +221,11 @@ public static partial class Frontmatter
                         Hoehe = Zahl("h", 96),
                         Seite = (int)Zahl("seite", 0),
                     },
-                    "tabelle" => new TabelleElement(),
+                    "tabelle" => new TabelleElement
+                    {
+                        SpaltenBreiten = ZahlListe(attrs.GetValueOrDefault("sb")),
+                        ZeilenHoehen = ZahlListe(attrs.GetValueOrDefault("zh")),
+                    },
                     _ => null,
                 };
                 if (el is null) continue;
@@ -252,6 +256,15 @@ public static partial class Frontmatter
     }
 
     // ---------- Markdown-Tabellen ----------
+
+    /// <summary>"120,340,80" → Liste positiver Zahlen (für Spaltenbreiten/Zeilenhöhen).</summary>
+    static List<double> ZahlListe(string? s) =>
+        string.IsNullOrWhiteSpace(s)
+            ? new()
+            : s.Split(',')
+                .Select(t => double.TryParse(t.Trim(), CultureInfo.InvariantCulture, out var d) ? d : 0)
+                .Where(d => d > 0)
+                .ToList();
 
     /// <summary>Zelleninhalt fürs Markdown: Pipes und Umbrüche maskieren.</summary>
     static string MdZelle(string s) => s
@@ -495,7 +508,12 @@ public static partial class Frontmatter
                     sb.Append("-->\n\n");
                     break;
                 case TabelleElement tab when tab.Zeilen.Count > 0:
-                    sb.Append($"<!--el tabelle {pos}-->\n");
+                    sb.Append($"<!--el tabelle {pos}");
+                    if (tab.SpaltenBreiten.Count > 0)
+                        sb.Append($" sb=\"{string.Join(',', tab.SpaltenBreiten.Select(x => (int)x))}\"");
+                    if (tab.ZeilenHoehen.Any(h => h > 28))
+                        sb.Append($" zh=\"{string.Join(',', tab.ZeilenHoehen.Select(x => (int)x))}\"");
+                    sb.Append("-->\n");
                     for (int z = 0; z < tab.Zeilen.Count; z++)
                     {
                         sb.Append("| " + string.Join(" | ", tab.Zeilen[z].Select(MdZelle)) + " |\n");

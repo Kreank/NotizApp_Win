@@ -437,8 +437,20 @@ public partial class NoteEditor : UserControl
 
     void TabelleBreite_DragDelta(object sender, DragDeltaEventArgs e)
     {
-        if (VmVon<TabelleElementVm>(sender) is { } vm)
-            vm.Breite = Math.Max(160, vm.Breite + e.HorizontalChange);
+        // Rechte Tabellenkante: alle Spalten proportional skalieren
+        VmVon<TabelleElementVm>(sender)?.SkaliereBreite(e.HorizontalChange);
+    }
+
+    void TabelleSpalteBreite_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ZelleVm zelle)
+            zelle.ZieheSpaltenBreite(e.HorizontalChange);
+    }
+
+    void TabelleZeileHoehe_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is TabellenZeileVm zeile)
+            zeile.ZieheHoehe(e.VerticalChange);
     }
 
     /// <summary>Tab springt zur nächsten Zelle (Umschalt+Tab zurück); in der

@@ -70,6 +70,10 @@ public class DateiElement : NoteElement
 public class TabelleElement : NoteElement
 {
     public List<List<string>> Zeilen { get; set; } = new();
+    /// <summary>Spaltenbreiten in px; leer = gleichmäßig aus Breite verteilt.</summary>
+    public List<double> SpaltenBreiten { get; set; } = new();
+    /// <summary>Mindesthöhen der Zeilen in px; leer = automatisch nach Inhalt.</summary>
+    public List<double> ZeilenHoehen { get; set; } = new();
 }
 
 /// <summary>Alte Tinten-Sidecar-Datei (Blockformat vor dem Freiform-Canvas) samt

@@ -350,6 +350,23 @@ public class ZelleVm : INotifyPropertyChanged
         }
     }
 
+    // Spaltenbreite: alle Zellen einer Spalte teilen sich den Wert — verwaltet
+    // von der Tabelle, die Zelle meldet nur den Zieh-Wunsch nach oben
+    internal Action<double>? SpaltenZiehen;
+    public void ZieheSpaltenBreite(double delta) => SpaltenZiehen?.Invoke(delta);
+
+    double _breite = 200;
+    public double Breite
+    {
+        get => _breite;
+        internal set
+        {
+            if (Math.Abs(_breite - value) < 0.5) return;
+            _breite = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Breite)));
+        }
+    }
+
     public bool HatBild => BildDatei is not null;
     public ImageSource? BildQuelle =>
         BildDatei is { } datei ? BildLader?.Invoke(datei) : null;
@@ -372,10 +389,31 @@ public class ZelleVm : INotifyPropertyChanged
     }
 }
 
-/// <summary>Eine Tabellenzeile (nur Container für die Zellen).</summary>
-public class TabellenZeileVm
+/// <summary>Eine Tabellenzeile: Zellen + ziehbare Mindesthöhe.</summary>
+public class TabellenZeileVm : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    internal Action? Geaendert;
+
     public System.Collections.ObjectModel.ObservableCollection<ZelleVm> Zellen { get; } = new();
+
+    public const double MinZeilenHoehe = 27;
+
+    double _minHoehe = MinZeilenHoehe;
+    public double MinHoehe
+    {
+        get => _minHoehe;
+        set
+        {
+            value = Math.Max(MinZeilenHoehe, value);
+            if (Math.Abs(_minHoehe - value) < 0.5) return;
+            _minHoehe = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MinHoehe)));
+            Geaendert?.Invoke();
+        }
+    }
+
+    public void ZieheHoehe(double delta) => MinHoehe += delta;
 }
 
 /// <summary>Tabelle auf der Fläche: verschieb- und breitenverstellbar, Zellen
@@ -391,12 +429,24 @@ public class TabelleElementVm : ElementVm
 
     int SpaltenAnzahl => Zeilen.FirstOrDefault()?.Zellen.Count ?? 0;
 
+    /// <summary>Breite jeder Spalte in px; Quelle der Wahrheit — die Zellen
+    /// spiegeln nur den Wert ihrer Spalte.</summary>
+    readonly List<double> _spaltenBreiten = new();
+
     public TabelleElementVm() { }
     public TabelleElementVm(TabelleElement el)
     {
         X = el.X; Y = el.Y; Breite = el.Breite;
+        int spalten = el.Zeilen.Count == 0 ? 0 : el.Zeilen.Max(z => z.Count);
+        _spaltenBreiten.AddRange(el.SpaltenBreiten.Take(spalten));
+        // Alte Notizen ohne gespeicherte Breiten: Gesamtbreite gleichmäßig verteilen
+        while (_spaltenBreiten.Count < spalten)
+            _spaltenBreiten.Add(Math.Max(48, (el.Breite - 2) / Math.Max(1, spalten)));
         foreach (var zeile in el.Zeilen)
             FuegeZeileHinzu(zeile);
+        for (int z = 0; z < Zeilen.Count && z < el.ZeilenHoehen.Count; z++)
+            Zeilen[z].MinHoehe = el.ZeilenHoehen[z];
+        AktualisiereBreite();
     }
 
     string? _ordner;
@@ -433,25 +483,48 @@ public class TabelleElementVm : ElementVm
         }
     }
 
-    ZelleVm NeueZelle(string text = "") =>
-        new() { Text = text, Geaendert = MeldeGeaendert, BildLader = LadeZellBild };
+    ZelleVm NeueZelle(string text, int spalte)
+    {
+        var zelle = new ZelleVm
+        {
+            Geaendert = MeldeGeaendert,
+            BildLader = LadeZellBild,
+            Breite = _spaltenBreiten[spalte],
+            Text = text,
+        };
+        zelle.SpaltenZiehen = delta => AendereSpaltenBreite(zelle, delta);
+        return zelle;
+    }
+
+    /// <summary>Sorgt dafür, dass für jede Spalte eine Breite hinterlegt ist.</summary>
+    void SichereSpaltenBreiten(int spalten)
+    {
+        double std = _spaltenBreiten.Count > 0
+            ? _spaltenBreiten[^1]
+            : Math.Max(60, (Breite - 2) / Math.Max(1, spalten));
+        while (_spaltenBreiten.Count < spalten) _spaltenBreiten.Add(std);
+    }
 
     public void FuegeZeileHinzu(IEnumerable<string>? werte = null)
     {
-        var zeile = new TabellenZeileVm();
-        if (werte is not null)
-        {
-            foreach (var w in werte) zeile.Zellen.Add(NeueZelle(w));
-        }
-        while (zeile.Zellen.Count < Math.Max(1, SpaltenAnzahl))
-            zeile.Zellen.Add(NeueZelle());
+        var texte = (werte ?? Enumerable.Empty<string>()).ToList();
+        int spalten = Math.Max(Math.Max(1, SpaltenAnzahl), texte.Count);
+        SichereSpaltenBreiten(spalten);
+
+        var zeile = new TabellenZeileVm { Geaendert = MeldeGeaendert };
+        for (int s = 0; s < spalten; s++)
+            zeile.Zellen.Add(NeueZelle(s < texte.Count ? texte[s] : "", s));
         Zeilen.Add(zeile);
+        AktualisiereBreite();
         MeldeGeaendert();
     }
 
     public void FuegeSpalteHinzu()
     {
-        foreach (var zeile in Zeilen) zeile.Zellen.Add(NeueZelle());
+        int neu = SpaltenAnzahl;
+        SichereSpaltenBreiten(neu + 1);
+        foreach (var zeile in Zeilen) zeile.Zellen.Add(NeueZelle("", neu));
+        AktualisiereBreite();
         MeldeGeaendert();
     }
 
@@ -467,8 +540,51 @@ public class TabelleElementVm : ElementVm
         if (SpaltenAnzahl <= 1) return;
         foreach (var zeile in Zeilen)
             zeile.Zellen.RemoveAt(zeile.Zellen.Count - 1);
+        if (_spaltenBreiten.Count > 0)
+            _spaltenBreiten.RemoveAt(_spaltenBreiten.Count - 1);
+        AktualisiereBreite();
         MeldeGeaendert();
     }
+
+    // ---------- Spaltenbreiten / Gesamtbreite ----------
+
+    void AendereSpaltenBreite(ZelleVm zelle, double delta)
+    {
+        int spalte = -1;
+        foreach (var zeile in Zeilen)
+        {
+            spalte = zeile.Zellen.IndexOf(zelle);
+            if (spalte >= 0) break;
+        }
+        if (spalte < 0 || spalte >= _spaltenBreiten.Count) return;
+        SetzeSpaltenBreite(spalte, _spaltenBreiten[spalte] + delta);
+    }
+
+    void SetzeSpaltenBreite(int spalte, double breite)
+    {
+        breite = Math.Max(48, breite);
+        if (Math.Abs(_spaltenBreiten[spalte] - breite) < 0.5) return;
+        _spaltenBreiten[spalte] = breite;
+        foreach (var zeile in Zeilen)
+        {
+            if (spalte < zeile.Zellen.Count) zeile.Zellen[spalte].Breite = breite;
+        }
+        AktualisiereBreite();
+        MeldeGeaendert();
+    }
+
+    /// <summary>Ziehen an der rechten Tabellenkante skaliert alle Spalten proportional.</summary>
+    public void SkaliereBreite(double delta)
+    {
+        double summe = _spaltenBreiten.Sum();
+        if (summe <= 0) return;
+        double faktor = Math.Max(0.2, (summe + delta) / summe);
+        for (int s = 0; s < _spaltenBreiten.Count; s++)
+            SetzeSpaltenBreite(s, _spaltenBreiten[s] * faktor);
+    }
+
+    void AktualisiereBreite() =>
+        Breite = Math.Max(MinBreite, _spaltenBreiten.Sum() + 2);
 
     /// <summary>Kopf + n leere Zeilen (für den Tabelle-einfügen-Button).</summary>
     public void FuelleStandard(int zeilen, int spalten)
@@ -499,6 +615,8 @@ public class TabelleElementVm : ElementVm
         var el = new TabelleElement
         {
             Zeilen = Zeilen.Select(z => z.Zellen.Select(c => c.Text).ToList()).ToList(),
+            SpaltenBreiten = new List<double>(_spaltenBreiten),
+            ZeilenHoehen = Zeilen.Select(z => z.MinHoehe).ToList(),
         };
         UebernehmePosition(el);
         return el;
