@@ -11,6 +11,10 @@ public class AppSettings
     public bool Autostart { get; set; } = false;
     /// <summary>Ziel-Notizbuch für die Schnellerfassung.</summary>
     public string QuickNotebook { get; set; } = "Kunden-Anrufe";
+    /// <summary>Linke Seitenleiste (Notizbücher/Tags) eingeklappt.</summary>
+    public bool SidebarZu { get; set; }
+    /// <summary>Mittlere Spalte (Suche/Notizliste) eingeklappt.</summary>
+    public bool ListeZu { get; set; }
 }
 
 /// <summary>

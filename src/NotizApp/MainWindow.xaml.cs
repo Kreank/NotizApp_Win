@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     public ICommand SuchenCommand { get; }
     public ICommand NeuLadenCommand { get; }
     public ICommand FokusCommand { get; }
+    public ICommand SidebarToggleCommand { get; }
+    public ICommand ListeToggleCommand { get; }
 
     public MainWindow(NoteStore store, SettingsService settings, InkRecognitionService erkennung)
     {
@@ -41,9 +43,16 @@ public partial class MainWindow : Window
         SuchenCommand = new RelayCommand(() => { SuchBox.Focus(); SuchBox.SelectAll(); });
         NeuLadenCommand = new RelayCommand(NeuLaden);
         FokusCommand = new RelayCommand(() => Editor.SetzeFokusToggle(!_fokusAktiv));
+        SidebarToggleCommand = new RelayCommand(() => KlappeSidebar(!_sidebarZu));
+        ListeToggleCommand = new RelayCommand(() => KlappeListe(!_listeZu));
 
         InitializeComponent();
         _initialisiert = true;
+
+        // Gemerkten Einklapp-Zustand der Seitenleisten wiederherstellen
+        _sidebarZu = settings.Aktuell.SidebarZu;
+        _listeZu = settings.Aktuell.ListeZu;
+        if (_sidebarZu || _listeZu) WendeSpaltenAn();
 
         Editor.Erkennung = erkennung;
         Editor.Ki = new KiService();
@@ -380,43 +389,70 @@ public partial class MainWindow : Window
         ZeigeEditorHinweis();
     }
 
-    // ---------- Fokus-Modus (Seitenleisten einklappen) ----------
+    // ---------- Seitenleisten einklappen (einzeln + Fokus-Modus) ----------
 
     bool _fokusAktiv;
+    bool _sidebarZu, _listeZu;
     GridLength _sidebarBreite = new(230);
     GridLength _listeBreite = new(330);
-    double _sidebarMin = 170, _listeMin = 240;
+    const double SidebarMin = 170, ListeMin = 240;
 
     void SetzeFokusModus(bool an)
     {
         if (an == _fokusAktiv) return;
         _fokusAktiv = an;
-        if (an)
+        WendeSpaltenAn();
+    }
+
+    void KlappeSidebar(bool zu)
+    {
+        _sidebarZu = zu;
+        WendeSpaltenAn();
+        _settings.Aktuell.SidebarZu = zu;
+        _settings.Speichere();
+    }
+
+    void KlappeListe(bool zu)
+    {
+        _listeZu = zu;
+        WendeSpaltenAn();
+        _settings.Aktuell.ListeZu = zu;
+        _settings.Speichere();
+    }
+
+    void SidebarZuklappen_Click(object sender, RoutedEventArgs e) => KlappeSidebar(true);
+    void SidebarAusklappen_Click(object sender, RoutedEventArgs e) => KlappeSidebar(false);
+    void ListeZuklappen_Click(object sender, RoutedEventArgs e) => KlappeListe(true);
+    void ListeAusklappen_Click(object sender, RoutedEventArgs e) => KlappeListe(false);
+
+    /// <summary>Spaltenzustand anwenden: offen, eingeklappt (schmale Leiste) oder Fokus (ganz weg).</summary>
+    void WendeSpaltenAn()
+    {
+        WendeSpalteAn(SidebarSpalte, SidebarPanel, SidebarRail, SplitterLinks,
+            ref _sidebarBreite, SidebarMin, offen: !_fokusAktiv && !_sidebarZu, rail: !_fokusAktiv && _sidebarZu);
+        WendeSpalteAn(ListeSpalte, ListePanel, ListeRail, SplitterRechts,
+            ref _listeBreite, ListeMin, offen: !_fokusAktiv && !_listeZu, rail: !_fokusAktiv && _listeZu);
+    }
+
+    static void WendeSpalteAn(ColumnDefinition spalte, UIElement panel, UIElement railElement,
+        UIElement splitter, ref GridLength breite, double minBreite, bool offen, bool rail)
+    {
+        if (offen)
         {
-            _sidebarBreite = SidebarSpalte.Width;
-            _listeBreite = ListeSpalte.Width;
-            _sidebarMin = SidebarSpalte.MinWidth;
-            _listeMin = ListeSpalte.MinWidth;
-            SidebarSpalte.MinWidth = 0;
-            ListeSpalte.MinWidth = 0;
-            SidebarSpalte.Width = new GridLength(0);
-            ListeSpalte.Width = new GridLength(0);
-            SidebarPanel.Visibility = Visibility.Collapsed;
-            ListePanel.Visibility = Visibility.Collapsed;
-            SplitterLinks.Visibility = Visibility.Collapsed;
-            SplitterRechts.Visibility = Visibility.Collapsed;
+            spalte.MinWidth = minBreite;
+            spalte.Width = breite;
         }
         else
         {
-            SidebarSpalte.MinWidth = _sidebarMin;
-            ListeSpalte.MinWidth = _listeMin;
-            SidebarSpalte.Width = _sidebarBreite;
-            ListeSpalte.Width = _listeBreite;
-            SidebarPanel.Visibility = Visibility.Visible;
-            ListePanel.Visibility = Visibility.Visible;
-            SplitterLinks.Visibility = Visibility.Visible;
-            SplitterRechts.Visibility = Visibility.Visible;
+            // Aktuelle (per Splitter gezogene) Breite fürs Wiederausklappen merken
+            if (panel.Visibility == Visibility.Visible && spalte.Width.Value > 0)
+                breite = spalte.Width;
+            spalte.MinWidth = 0;
+            spalte.Width = rail ? GridLength.Auto : new GridLength(0);
         }
+        panel.Visibility = offen ? Visibility.Visible : Visibility.Collapsed;
+        railElement.Visibility = rail ? Visibility.Visible : Visibility.Collapsed;
+        splitter.Visibility = offen ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Fenster aus dem Tray heraus anzeigen.</summary>

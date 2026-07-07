@@ -13,6 +13,8 @@
         <KeyBinding Modifiers="Control" Key="F" Command="{Binding SuchenCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
         <KeyBinding Key="F5" Command="{Binding NeuLadenCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
         <KeyBinding Key="F11" Command="{Binding FokusCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Modifiers="Control" Key="B" Command="{Binding SidebarToggleCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Modifiers="Control+Shift" Key="B" Command="{Binding ListeToggleCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -26,11 +28,17 @@
 
         <!-- ===== Sidebar ===== -->
         <DockPanel x:Name="SidebarPanel" Grid.Column="0" Margin="10,10,4,10">
-            <Button x:Name="NeueNotizButton" DockPanel.Dock="Top"
-                    Content="＋ Neue Notiz" FontWeight="SemiBold"
-                    HorizontalAlignment="Stretch" Padding="0,8"
-                    Click="NeueNotiz_Click"
-                    ContextMenuService.Placement="Bottom"/>
+            <DockPanel DockPanel.Dock="Top">
+                <Button DockPanel.Dock="Right" Content="⮜" Margin="4,0,0,0" Padding="4,8"
+                        BorderThickness="0" Background="Transparent"
+                        ToolTip="Seitenleiste einklappen (Strg+B)"
+                        Click="SidebarZuklappen_Click"/>
+                <Button x:Name="NeueNotizButton"
+                        Content="＋ Neue Notiz" FontWeight="SemiBold"
+                        HorizontalAlignment="Stretch" Padding="0,8"
+                        Click="NeueNotiz_Click"
+                        ContextMenuService.Placement="Bottom"/>
+            </DockPanel>
 
             <Button DockPanel.Dock="Bottom" Content="⚙ Einstellungen"
                     HorizontalAlignment="Stretch" Padding="0,6" Margin="0,8,0,0"
@@ -62,15 +70,36 @@
                      SelectionChanged="TagListe_SelectionChanged"/>
         </DockPanel>
 
+        <!-- Schmale Leiste, wenn die Sidebar eingeklappt ist -->
+        <Button x:Name="SidebarRail" Grid.Column="0" Visibility="Collapsed"
+                Margin="6,10,2,10" Padding="2,8" VerticalAlignment="Stretch"
+                VerticalContentAlignment="Top" BorderThickness="0" Background="Transparent"
+                ToolTip="Seitenleiste ausklappen (Strg+B)" Click="SidebarAusklappen_Click">
+            <StackPanel>
+                <TextBlock Text="⮞" HorizontalAlignment="Center"/>
+                <TextBlock Text="NOTIZBÜCHER" FontSize="10" Opacity="0.55"
+                           Margin="0,12,0,0" HorizontalAlignment="Center">
+                    <TextBlock.LayoutTransform>
+                        <RotateTransform Angle="90"/>
+                    </TextBlock.LayoutTransform>
+                </TextBlock>
+            </StackPanel>
+        </Button>
+
         <GridSplitter x:Name="SplitterLinks" Grid.Column="1" Width="4" HorizontalAlignment="Center"
                       VerticalAlignment="Stretch" Background="Transparent"/>
 
         <!-- ===== Mittlere Spalte: Suche + Notizliste / Aufgabenliste ===== -->
         <DockPanel x:Name="ListePanel" Grid.Column="2" Margin="4,10,4,10">
-            <TextBox x:Name="SuchBox" DockPanel.Dock="Top" Margin="0,0,0,8"
-                     Padding="6,5" FontSize="13"
-                     TextChanged="SuchBox_TextChanged"
-                     ToolTip="Volltextsuche (Strg+F): Text, Handschrift, Titel, Tags, Kunde"/>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="⮜" Margin="4,0,0,0" Padding="4,5"
+                        BorderThickness="0" Background="Transparent"
+                        ToolTip="Notizliste einklappen (Strg+Umschalt+B)"
+                        Click="ListeZuklappen_Click"/>
+                <TextBox x:Name="SuchBox" Padding="6,5" FontSize="13"
+                         TextChanged="SuchBox_TextChanged"
+                         ToolTip="Volltextsuche (Strg+F): Text, Handschrift, Titel, Tags, Kunde"/>
+            </DockPanel>
 
             <TextBlock x:Name="ListeLeerHinweis" DockPanel.Dock="Bottom"
                        Text="" Opacity="0.55" Margin="4,6" TextWrapping="Wrap"/>
@@ -140,6 +169,22 @@
                 </ListBox>
             </Grid>
         </DockPanel>
+
+        <!-- Schmale Leiste, wenn die Notizliste eingeklappt ist -->
+        <Button x:Name="ListeRail" Grid.Column="2" Visibility="Collapsed"
+                Margin="2,10,2,10" Padding="2,8" VerticalAlignment="Stretch"
+                VerticalContentAlignment="Top" BorderThickness="0" Background="Transparent"
+                ToolTip="Notizliste ausklappen (Strg+Umschalt+B)" Click="ListeAusklappen_Click">
+            <StackPanel>
+                <TextBlock Text="⮞" HorizontalAlignment="Center"/>
+                <TextBlock Text="NOTIZEN" FontSize="10" Opacity="0.55"
+                           Margin="0,12,0,0" HorizontalAlignment="Center">
+                    <TextBlock.LayoutTransform>
+                        <RotateTransform Angle="90"/>
+                    </TextBlock.LayoutTransform>
+                </TextBlock>
+            </StackPanel>
+        </Button>
 
         <GridSplitter x:Name="SplitterRechts" Grid.Column="3" Width="4" HorizontalAlignment="Center"
                       VerticalAlignment="Stretch" Background="Transparent"/>
