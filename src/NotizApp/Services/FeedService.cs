@@ -9,7 +9,9 @@ public class FeedEintrag
     public string Titel { get; set; } = "";
     public string Zusammenfassung { get; set; } = "";
     public string Url { get; set; } = "";
-    /// <summary>"ki" oder "branche".</summary>
+    /// <summary>"ki", "recht", "foerderung" oder "technik" — Unbekanntes (z.B.
+    /// altes "branche" aus dem Cache) bleibt erhalten und wird in der Anzeige
+    /// als „Branche" gruppiert.</summary>
     public string Kategorie { get; set; } = "";
     /// <summary>"JJJJ-MM-TT", so wie von Claude geliefert.</summary>
     public string Datum { get; set; } = "";
@@ -17,8 +19,8 @@ public class FeedEintrag
 
 /// <summary>
 /// Besorgt den Neuigkeiten-Feed fürs Dashboard: Claude recherchiert im
-/// Container (KI-Neuigkeiten + SHK-Branche), das Ergebnis wird 12 Stunden
-/// in %APPDATA%\NotizApp\feed.json zwischengespeichert.
+/// Container (KI, Recht &amp; Normen, Förderung, Technik), das Ergebnis wird
+/// 12 Stunden in %APPDATA%\NotizApp\feed.json zwischengespeichert.
 /// </summary>
 public class FeedService
 {
@@ -41,14 +43,18 @@ public class FeedService
 
     const string Auftrag =
         "Recherchiere die wichtigsten Neuigkeiten der letzten 14 Tage für den Inhaber " +
-        "eines deutschen SHK-Handwerksbetriebs, zwei Kategorien: " +
+        "eines deutschen SHK-Handwerksbetriebs, vier Kategorien: " +
         "(1) kategorie=ki: KI-Neuigkeiten mit Praxisrelevanz (neue Modelle/Werkzeuge, " +
         "Claude/OpenAI/Google, KI im Handwerk). " +
-        "(2) kategorie=branche: SHK-relevante Änderungen — Gesetze (GEG etc.), Normen " +
-        "(DIN/DVGW/VDI/TRGI), Förderprogramme (BEG/KfW), Pflichten/Fristen. " +
+        "(2) kategorie=recht: Gesetze, Normen und Pflichten — GEG, DIN/DVGW/VDI, " +
+        "TRGI, Fristen. " +
+        "(3) kategorie=foerderung: Förderprogramme — BEG, KfW, weitere Zuschüsse. " +
+        "(4) kategorie=technik: Produkte, Werkzeuge und Praxis-Themen fürs " +
+        "SHK-Handwerk. " +
         "Liefere ein JSON-Array mit 6 bis 10 Objekten: " +
         "{\"titel\":…, \"zusammenfassung\":2-3 Sätze deutsch mit der Kernaussage, " +
-        "\"url\":echte recherchierte Quelle, \"kategorie\":\"ki\"|\"branche\", " +
+        "\"url\":echte recherchierte Quelle, " +
+        "\"kategorie\":\"ki\"|\"recht\"|\"foerderung\"|\"technik\", " +
         "\"datum\":\"JJJJ-MM-TT\"}. Nur das JSON-Array, nichts davor oder danach.";
 
     readonly KiService _ki;
@@ -114,8 +120,9 @@ public class FeedService
                     if (!Uri.TryCreate(e.Url, UriKind.Absolute, out var uri) ||
                         (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                         continue;
+                    // Nur normalisieren — unbekannte Kategorien (z.B. altes
+                    // "branche" aus dem Cache) bewusst nicht verwerfen
                     e.Kategorie = e.Kategorie.Trim().ToLowerInvariant();
-                    if (e.Kategorie is not ("ki" or "branche")) e.Kategorie = "branche";
                     eintraege.Add(e);
                 }
                 catch (JsonException)

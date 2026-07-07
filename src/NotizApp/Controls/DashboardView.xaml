@@ -3,9 +3,39 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:NotizApp.Controls">
     <UserControl.Resources>
-        <!-- Leiser Kupfer-Ton für die Branchen-Pille (Pendant zu AppAkzentLeiseBrush);
-             transluzent, funktioniert dadurch in hell und dunkel -->
-        <SolidColorBrush x:Key="KupferLeiseBrush" Color="#22C0703C"/>
+        <!-- Filter-Pille über den Feed-Karten: abgerundet, leiser Farbhintergrund
+             + Text in der Kategoriefarbe (Farben setzt FeedKategorien im Code);
+             die aktive Pille bekommt einen 1px-Rand in der Kategoriefarbe -->
+        <Style x:Key="FilterPille" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Huelle" CornerRadius="10"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Huelle" Property="BorderBrush"
+                                        Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Huelle" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- Rahmenloser, dezenter Button (Kalender-Navigation, Feed aktualisieren) -->
         <Style x:Key="LeiserButton" TargetType="Button">
@@ -133,6 +163,8 @@
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="Neuigkeiten für dich" FontSize="15" FontWeight="SemiBold"
                                Margin="2,0,0,10"/>
+                    <!-- Kategorie-Filter (Pillen), gefüllt im Code-Behind aus dem geladenen Feed -->
+                    <WrapPanel x:Name="FilterLeiste" Margin="2,0,0,6" Visibility="Collapsed"/>
                     <TextBlock x:Name="FeedHinweis" FontSize="12" Margin="2,0,0,12"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource AppTextLeiseBrush}"
@@ -157,14 +189,14 @@
                                                        Text="{Binding DatumAnzeige}"
                                                        VerticalAlignment="Center"
                                                        Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                                            <!-- Kategorie-Pille: 🔧 Branche in Kupfer, 🤖 KI in Petrol (Trigger) -->
-                                            <Border x:Name="Chip" CornerRadius="9" Padding="8,2"
+                                            <!-- Kategorie-Chip: Text + Farben kommen zentral
+                                                 aus FeedKategorien (übers Karten-VM) -->
+                                            <Border CornerRadius="9" Padding="8,2"
                                                     HorizontalAlignment="Left"
-                                                    Background="{StaticResource KupferLeiseBrush}">
-                                                <TextBlock x:Name="ChipText" FontSize="11"
-                                                           FontWeight="SemiBold"
+                                                    Background="{Binding ChipLeiseBrush}">
+                                                <TextBlock FontSize="11" FontWeight="SemiBold"
                                                            Text="{Binding ChipText}"
-                                                           Foreground="{DynamicResource AppKupferBrush}"/>
+                                                           Foreground="{Binding ChipTextBrush}"/>
                                             </Border>
                                         </DockPanel>
                                         <TextBlock Text="{Binding Titel}" FontSize="14"
@@ -187,12 +219,6 @@
                                     </StackPanel>
                                 </Border>
                                 <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IstKi}" Value="True">
-                                        <Setter TargetName="Chip" Property="Background"
-                                                Value="{DynamicResource AppAkzentLeiseBrush}"/>
-                                        <Setter TargetName="ChipText" Property="Foreground"
-                                                Value="{DynamicResource AppAkzentBrush}"/>
-                                    </DataTrigger>
                                     <Trigger SourceName="Karte" Property="IsMouseOver" Value="True">
                                         <Setter TargetName="Karte" Property="BorderBrush"
                                                 Value="{DynamicResource AppAkzentBrush}"/>

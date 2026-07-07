@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -30,6 +31,67 @@ public class TerminVm
     public string NotizTitel { get; }
 }
 
+/// <summary>
+/// Zentrale Zuordnung der Feed-Kategorien zu Anzeige (Icon + Label) und Farbe —
+/// die eine Stelle für Karten-Chips UND Filter-Pillen. Petrol/Kupfer/Leise-Text
+/// kommen aus dem Farbschema (hell/dunkel), Grün/Violett sind feste Töne, die
+/// in beiden Designs lesbar sind. Der leise Hintergrund ist immer dieselbe
+/// Farbe mit Alpha 0x22 — nie festes Schwarz/Weiß.
+/// </summary>
+public static class FeedKategorien
+{
+    /// <summary>Anzeige-Infos einer Kategorie: Label plus kräftige Textfarbe
+    /// und leiser Hintergrund (gleiche Farbe, Alpha 0x22).</summary>
+    public sealed record Anzeige(string Label, Brush Kraeftig, Brush Leise);
+
+    /// <summary>Feste Reihenfolge der Filter-Pillen.</summary>
+    public static readonly string[] Reihenfolge = { "ki", "recht", "foerderung", "technik", "branche" };
+
+    /// <summary>Normalisierter Schlüssel — Unbekanntes (auch altes "branche"
+    /// aus dem Cache) wird als "branche" gruppiert.</summary>
+    public static string Schluessel(string kategorie) => kategorie switch
+    {
+        "ki" or "recht" or "foerderung" or "technik" => kategorie,
+        _ => "branche",
+    };
+
+    public static Anzeige Fuer(string kategorie)
+    {
+        var (label, farbe) = Schluessel(kategorie) switch
+        {
+            "ki" => ("🤖 KI", FarbeAusResource("AppAkzentBrush", "#0E7490")),
+            "recht" => ("⚖ Recht & Normen", FarbeAusResource("AppKupferBrush", "#C0703C")),
+            "foerderung" => ("💶 Förderung", Farbe("#3B9E5F")),
+            "technik" => ("🔧 Technik", Farbe("#8E5BD8")),
+            _ => ("📰 Branche", FarbeAusResource("AppTextLeiseBrush", "#5E7278")),
+        };
+        return new Anzeige(label, Pinsel(farbe, 0xFF), Pinsel(farbe, 0x22));
+    }
+
+    /// <summary>Neutrale „Alle"-Pille im normalen Textton.</summary>
+    public static Anzeige Alle()
+    {
+        var farbe = FarbeAusResource("AppTextBrush", "#1A272C");
+        return new Anzeige("Alle", Pinsel(farbe, 0xFF), Pinsel(farbe, 0x22));
+    }
+
+    /// <summary>Aktuelle Farbe eines Farbschema-Brushes (folgt hell/dunkel;
+    /// die Chips werden bei jedem Feed-Aufbau neu erzeugt).</summary>
+    static Color FarbeAusResource(string schluessel, string fallbackHex) =>
+        Application.Current?.TryFindResource(schluessel) is SolidColorBrush b
+            ? b.Color
+            : Farbe(fallbackHex);
+
+    static Color Farbe(string hex) => (Color)ColorConverter.ConvertFromString(hex);
+
+    static Brush Pinsel(Color farbe, byte alpha)
+    {
+        var b = new SolidColorBrush(Color.FromArgb(alpha, farbe.R, farbe.G, farbe.B));
+        b.Freeze();
+        return b;
+    }
+}
+
 /// <summary>Eine Feed-Karte im Dashboard („Neuigkeiten für dich").</summary>
 public class FeedKarteVm
 {
@@ -38,7 +100,11 @@ public class FeedKarteVm
         Titel = eintrag.Titel;
         Zusammenfassung = eintrag.Zusammenfassung;
         Url = eintrag.Url;
-        IstKi = eintrag.Kategorie == "ki";
+        Kategorie = FeedKategorien.Schluessel(eintrag.Kategorie);
+        var anzeige = FeedKategorien.Fuer(eintrag.Kategorie);
+        ChipText = anzeige.Label;
+        ChipTextBrush = anzeige.Kraeftig;
+        ChipLeiseBrush = anzeige.Leise;
         DatumAnzeige = DateOnly.TryParseExact(eintrag.Datum, "yyyy-MM-dd",
                 CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
             ? d.ToString("dd.MM.yyyy", DashboardView.Kultur)
@@ -53,8 +119,11 @@ public class FeedKarteVm
     public string Titel { get; }
     public string Zusammenfassung { get; }
     public string Url { get; }
-    public bool IstKi { get; }
-    public string ChipText => IstKi ? "🤖 KI" : "🔧 Branche";
+    /// <summary>Normalisierter Kategorie-Schlüssel (für den Pillen-Filter).</summary>
+    public string Kategorie { get; }
+    public string ChipText { get; }
+    public Brush ChipTextBrush { get; }
+    public Brush ChipLeiseBrush { get; }
     public string DatumAnzeige { get; }
     public string Domain { get; }
 }
@@ -62,8 +131,9 @@ public class FeedKarteVm
 /// <summary>
 /// Dashboard-Ansicht: Begrüßung, eigener Monatskalender mit Terminen aus den
 /// Aufgaben ("- [ ] Text @JJJJ-MM-TT") und ein von Claude recherchierter
-/// Neuigkeiten-Feed (KI + SHK-Branche). Termin-Klick meldet die Quell-Notiz
-/// über <see cref="NotizGeklickt"/> ans Hauptfenster.
+/// Neuigkeiten-Feed (KI, Recht &amp; Normen, Förderung, Technik) mit
+/// Kategorie-Filter-Pillen. Termin-Klick meldet die Quell-Notiz über
+/// <see cref="NotizGeklickt"/> ans Hauptfenster.
 /// </summary>
 public partial class DashboardView : UserControl
 {
@@ -85,6 +155,10 @@ public partial class DashboardView : UserControl
     FeedService? _feed;
     bool _feedLaeuft;
     DateTime _feedGeladen; // wann der Feed zuletzt in die Ansicht kam
+    /// <summary>Alle geladenen Feed-Karten (ungefiltert).</summary>
+    List<FeedKarteVm> _feedKarten = new();
+    /// <summary>Aktiver Kategorie-Filter ("alle" oder ein Kategorie-Schlüssel).</summary>
+    string _feedFilter = "alle";
 
     public DashboardView()
     {
@@ -263,7 +337,7 @@ public partial class DashboardView : UserControl
     public void LadeFeedWennAlt()
     {
         if (_feedLaeuft) return;
-        if (FeedListe.Items.Count > 0 && DateTime.Now - _feedGeladen < TimeSpan.FromHours(12))
+        if (_feedKarten.Count > 0 && DateTime.Now - _feedGeladen < TimeSpan.FromHours(12))
             return;
         _ = LadeFeedAsync(erzwingen: false);
     }
@@ -290,9 +364,14 @@ public partial class DashboardView : UserControl
         {
             var eintraege = await _feed.HoleAsync(erzwingen,
                 s => StatusText.Text = s, CancellationToken.None);
-            FeedListe.ItemsSource = eintraege.Select(e => new FeedKarteVm(e)).ToList();
+            _feedKarten = eintraege.Select(e => new FeedKarteVm(e)).ToList();
             _feedGeladen = DateTime.Now;
-            if (eintraege.Count == 0)
+            // Filter beibehalten, sofern die Kategorie im neuen Feed noch vorkommt
+            if (_feedFilter != "alle" && _feedKarten.All(k => k.Kategorie != _feedFilter))
+                _feedFilter = "alle";
+            BaueFilterPillen();
+            ZeigeFeedKarten();
+            if (_feedKarten.Count == 0)
             {
                 FeedHinweis.Text = "Noch kein Feed — oben aktualisieren.";
                 FeedHinweis.Visibility = Visibility.Visible;
@@ -323,6 +402,60 @@ public partial class DashboardView : UserControl
             FeedButton.IsEnabled = true;
         }
     }
+
+    // ---------- Kategorie-Filter (Pillen) ----------
+
+    /// <summary>Pillen-Zeile neu aufbauen: „Alle" zuerst, dann je eine Pille pro
+    /// Kategorie, die im geladenen Feed tatsächlich vorkommt (feste Reihenfolge).
+    /// Es ist immer genau eine Pille aktiv.</summary>
+    void BaueFilterPillen()
+    {
+        FilterLeiste.Children.Clear();
+        if (_feedKarten.Count == 0)
+        {
+            FilterLeiste.Visibility = Visibility.Collapsed;
+            return;
+        }
+        FilterLeiste.Visibility = Visibility.Visible;
+
+        FilterLeiste.Children.Add(BauePille("alle", FeedKategorien.Alle()));
+        var vorhanden = _feedKarten.Select(k => k.Kategorie).ToHashSet();
+        foreach (var kategorie in FeedKategorien.Reihenfolge.Where(vorhanden.Contains))
+            FilterLeiste.Children.Add(BauePille(kategorie, FeedKategorien.Fuer(kategorie)));
+    }
+
+    ToggleButton BauePille(string schluessel, FeedKategorien.Anzeige anzeige)
+    {
+        var pille = new ToggleButton
+        {
+            Content = anzeige.Label,
+            Style = (Style)FindResource("FilterPille"),
+            Foreground = anzeige.Kraeftig,
+            Background = anzeige.Leise,
+            IsChecked = _feedFilter == schluessel,
+            Tag = schluessel,
+            ToolTip = schluessel == "alle"
+                ? "Alle Neuigkeiten zeigen"
+                : "Nur diese Kategorie zeigen",
+        };
+        pille.Click += FilterPille_Click;
+        return pille;
+    }
+
+    void FilterPille_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton pille || pille.Tag is not string schluessel) return;
+        // Abwählen der aktiven Pille fällt auf „Alle" zurück — so ist immer genau eine aktiv
+        _feedFilter = pille.IsChecked == true ? schluessel : "alle";
+        BaueFilterPillen(); // IsChecked-Zustände aller Pillen neu setzen
+        ZeigeFeedKarten();
+    }
+
+    /// <summary>Kartenanzeige aus dem gefilterten Bestand neu aufbauen.</summary>
+    void ZeigeFeedKarten() =>
+        FeedListe.ItemsSource = _feedFilter == "alle"
+            ? _feedKarten
+            : _feedKarten.Where(k => k.Kategorie == _feedFilter).ToList();
 
     void FeedKarte_Click(object sender, MouseButtonEventArgs e)
     {
