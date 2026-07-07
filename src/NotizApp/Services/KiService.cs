@@ -198,9 +198,13 @@ public class KiService
         "Dateinamen). Dateien erstellst du ausschließlich im Ordner /ausgabe: " +
         "Markdown/HTML direkt, PDFs mit 'pandoc eingabe.md -o name.pdf " +
         "--pdf-engine=weasyprint', Word mit 'pandoc eingabe.md -o name.docx', " +
-        "Tabellen als .csv (in Excel zu öffnen). Lösche Zwischendateien, sodass in " +
-        "/ausgabe nur fertige Dateien liegen. Wenn dir eine Notiz mitgegeben wurde, " +
-        "beziehe dich darauf; erfinde keine Fakten über den Betrieb oder Kunden.";
+        "Excel mit python3 + openpyxl. Technische Diagramme/Schemata (Abläufe, " +
+        "Anlagenschemata, Vergleiche) zeichnest du selbst: graphviz (dot), " +
+        "matplotlib (python3) oder handgeschriebenes SVG, mit " +
+        "'rsvg-convert datei.svg -o datei.png' als PNG exportiert. " +
+        "Lösche Zwischendateien, sodass in /ausgabe nur fertige Dateien liegen. " +
+        "Wenn dir eine Notiz mitgegeben wurde, beziehe dich darauf; erfinde keine " +
+        "Fakten über den Betrieb oder Kunden.";
 
     /// <summary>
     /// Eine Chat-Nachricht an Claude senden. sessionId=null startet eine neue
@@ -277,7 +281,9 @@ public class KiService
             "Du arbeitest für einen SHK-Handwerksbetrieb (Sanitär/Heizung/Klima) und erstellst " +
             "Dateien im Ordner /ausgabe — NUR dort. " +
             "Für PDFs: Markdown/HTML schreiben und konvertieren mit " +
-            "'pandoc eingabe.md -o name.pdf --pdf-engine=weasyprint'. " +
+            "'pandoc eingabe.md -o name.pdf --pdf-engine=weasyprint'. Word: pandoc -o name.docx. " +
+            "Excel: python3 + openpyxl. Technische Diagramme/Schemata zeichnest du selbst mit " +
+            "graphviz (dot), matplotlib (python3) oder SVG + 'rsvg-convert datei.svg -o datei.png'. " +
             "Bilder aus dem Netz lädst du mit curl (nur von seriösen Quellen, sinnvolle Dateinamen, " +
             "Formate jpg/png). Sprache Deutsch, sachlich. Erfinde keine Fakten — nutze nur, was in " +
             "der Notiz steht. Lösche Zwischendateien am Ende, sodass in /ausgabe nur die fertigen " +
