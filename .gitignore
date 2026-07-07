@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Lokale Testbilder im Projektstamm
+/*.png
+/*.jpg
