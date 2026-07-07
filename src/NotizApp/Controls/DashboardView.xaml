@@ -1,0 +1,208 @@
+<UserControl x:Class="NotizApp.Controls.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:NotizApp.Controls">
+    <UserControl.Resources>
+        <!-- Leiser Kupfer-Ton für die Branchen-Pille (Pendant zu AppAkzentLeiseBrush);
+             transluzent, funktioniert dadurch in hell und dunkel -->
+        <SolidColorBrush x:Key="KupferLeiseBrush" Color="#22C0703C"/>
+
+        <!-- Rahmenloser, dezenter Button (Kalender-Navigation, Feed aktualisieren) -->
+        <Style x:Key="LeiserButton" TargetType="Button">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+
+        <!-- Kopfzeile der Wochentage im Kalender -->
+        <Style x:Key="WochentagText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+        <StackPanel Margin="24">
+
+            <!-- ===== Kopfzeile: Begrüßung + Datum, rechts Feed-Aktualisierung ===== -->
+            <DockPanel Margin="0,0,0,24">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                            VerticalAlignment="Top">
+                    <TextBlock x:Name="StatusText" FontSize="11" Margin="0,0,8,0"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               MaxWidth="260"
+                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                    <Button x:Name="FeedButton" Content="⟳ Feed aktualisieren" FontSize="12"
+                            Style="{StaticResource LeiserButton}"
+                            ToolTip="Neuigkeiten neu recherchieren (Claude — dauert einige Minuten)"
+                            Click="FeedAktualisieren_Click"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock x:Name="BegruessungText" FontSize="28" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="DatumText" FontSize="13" Margin="0,4,0,0"
+                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                </StackPanel>
+            </DockPanel>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== Links: Monatskalender + Terminliste ===== -->
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <Border CornerRadius="12" Padding="14" BorderThickness="1"
+                            Background="{DynamicResource AppFlaecheBrush}"
+                            BorderBrush="{DynamicResource AppRandBrush}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Left" Content="‹" FontSize="14"
+                                        Style="{StaticResource LeiserButton}"
+                                        ToolTip="Voriger Monat" Click="MonatZurueck_Click"/>
+                                <Button DockPanel.Dock="Right" Content="›" FontSize="14"
+                                        Style="{StaticResource LeiserButton}"
+                                        ToolTip="Nächster Monat" Click="MonatVor_Click"/>
+                                <TextBlock x:Name="MonatText" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <UniformGrid Columns="7" Margin="0,0,0,4">
+                                <TextBlock Text="Mo" Style="{StaticResource WochentagText}"/>
+                                <TextBlock Text="Di" Style="{StaticResource WochentagText}"/>
+                                <TextBlock Text="Mi" Style="{StaticResource WochentagText}"/>
+                                <TextBlock Text="Do" Style="{StaticResource WochentagText}"/>
+                                <TextBlock Text="Fr" Style="{StaticResource WochentagText}"/>
+                                <TextBlock Text="Sa" Style="{StaticResource WochentagText}"/>
+                                <TextBlock Text="So" Style="{StaticResource WochentagText}"/>
+                            </UniformGrid>
+                            <!-- 6 Wochenzeilen à 7 Tage, gefüllt im Code-Behind -->
+                            <UniformGrid x:Name="KalenderTage" Columns="7" Rows="6"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Termine" FontSize="15" FontWeight="SemiBold"
+                               Margin="2,20,0,8"/>
+                    <TextBlock x:Name="TermineLeer" FontSize="12" Margin="2,0,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource AppTextLeiseBrush}"
+                               Text="Keine anstehenden Termine. Aufgaben mit Datum (@2026-07-09) erscheinen hier."/>
+                    <ItemsControl x:Name="TerminListe">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="8" Padding="8,6" Margin="0,0,0,4"
+                                        Cursor="Hand" MouseLeftButtonUp="Termin_Click"
+                                        ToolTip="Klick öffnet die Quell-Notiz">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource AppAkzentLeiseBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" Width="68"
+                                                   Text="{Binding DatumKompakt}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Margin="0,1,6,0"
+                                                   Foreground="{DynamicResource AppKupferBrush}"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Text}" FontSize="13"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding NotizTitel}" FontSize="11"
+                                                       Margin="0,1,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- ===== Rechts: Neuigkeiten-Feed ===== -->
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Neuigkeiten für dich" FontSize="15" FontWeight="SemiBold"
+                               Margin="2,0,0,10"/>
+                    <TextBlock x:Name="FeedHinweis" FontSize="12" Margin="2,0,0,12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource AppTextLeiseBrush}"
+                               Text="Noch kein Feed — oben aktualisieren."/>
+                    <ItemsControl x:Name="FeedListe">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="Karte" Width="340" CornerRadius="12" Padding="16"
+                                        Margin="0,0,14,14" BorderThickness="1" Cursor="Hand"
+                                        Background="{DynamicResource AppFlaecheBrush}"
+                                        BorderBrush="{DynamicResource AppRandBrush}"
+                                        MouseLeftButtonUp="FeedKarte_Click"
+                                        ToolTip="{Binding Url}">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" FontSize="11"
+                                                       Text="{Binding DatumAnzeige}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                            <!-- Kategorie-Pille: 🔧 Branche in Kupfer, 🤖 KI in Petrol (Trigger) -->
+                                            <Border x:Name="Chip" CornerRadius="9" Padding="8,2"
+                                                    HorizontalAlignment="Left"
+                                                    Background="{StaticResource KupferLeiseBrush}">
+                                                <TextBlock x:Name="ChipText" FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding ChipText}"
+                                                           Foreground="{DynamicResource AppKupferBrush}"/>
+                                            </Border>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Titel}" FontSize="14"
+                                                   FontWeight="SemiBold" Margin="0,10,0,0"
+                                                   TextWrapping="Wrap" MaxHeight="40"
+                                                   LineHeight="20"
+                                                   LineStackingStrategy="BlockLineHeight"/>
+                                        <TextBlock Text="{Binding Zusammenfassung}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,6,0,0"
+                                                   Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                        <DockPanel Margin="0,10,0,0">
+                                            <TextBlock DockPanel.Dock="Right" FontSize="11"
+                                                       Text="{Binding Domain}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                            <TextBlock Text="Quelle öffnen ↗" FontSize="11"
+                                                       Foreground="{DynamicResource AppAkzentBrush}"/>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IstKi}" Value="True">
+                                        <Setter TargetName="Chip" Property="Background"
+                                                Value="{DynamicResource AppAkzentLeiseBrush}"/>
+                                        <Setter TargetName="ChipText" Property="Foreground"
+                                                Value="{DynamicResource AppAkzentBrush}"/>
+                                    </DataTrigger>
+                                    <Trigger SourceName="Karte" Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Karte" Property="BorderBrush"
+                                                Value="{DynamicResource AppAkzentBrush}"/>
+                                    </Trigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

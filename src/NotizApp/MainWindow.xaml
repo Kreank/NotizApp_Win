@@ -107,6 +107,7 @@
                          SelectionChanged="AnsichtListe_SelectionChanged">
                     <ListBoxItem Content="📚 Alle Notizen" IsSelected="True"/>
                     <ListBoxItem Content="☑ Aufgaben"/>
+                    <ListBoxItem Content="▦ Dashboard"/>
                 </ListBox>
             </StackPanel>
 
@@ -263,6 +264,9 @@
                        Text="Keine Notiz ausgewählt.&#10;&#10;＋ Neue Notiz (Strg+N) oder links eine Notiz wählen."
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextAlignment="Center" Opacity="0.5"/>
+
+            <!-- Dashboard-Ansicht (Sidebar „▦ Dashboard") — liegt über dem Editor -->
+            <controls:DashboardView x:Name="Dashboard" Visibility="Collapsed"/>
 
             <!-- Schwebende Chat-Bubble: immer erreichbar, auch ohne offene Notiz -->
             <Button x:Name="ChatBubble" Width="46" Height="46"

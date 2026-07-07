@@ -62,7 +62,8 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <DockPanel Margin="4,10,10,10">
+    <DockPanel Margin="4,10,10,10" AllowDrop="True"
+               PreviewDragOver="Chat_DragOver" PreviewDrop="Chat_Drop">
         <!-- Kopf -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
             <Button DockPanel.Dock="Right" Content="🗑 Neu" Padding="6,2" FontSize="11"
@@ -78,6 +79,33 @@
                 BorderThickness="1" BorderBrush="{DynamicResource AppRandBrush}"
                 Background="{DynamicResource AppFlaecheBrush}">
             <DockPanel>
+                <!-- Per Drag & Drop angehängte Dateien (gehen mit der nächsten Nachricht mit) -->
+                <ItemsControl x:Name="DropListe" DockPanel.Dock="Top">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="4" Padding="6,2" Margin="0,0,4,4"
+                                    Background="{DynamicResource AppFlaecheTiefBrush}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📎" FontSize="11" Margin="0,0,4,0"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="11"
+                                               VerticalAlignment="Center" MaxWidth="180"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Pfad}"/>
+                                    <Button Content="✕" FontSize="10" Padding="4,0" Margin="2,0,0,0"
+                                            BorderThickness="0" Background="Transparent"
+                                            Foreground="{DynamicResource AppTextBrush}"
+                                            ToolTip="Anhang entfernen"
+                                            Click="DropEntfernen_Click"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
                 <CheckBox x:Name="KontextCheck" DockPanel.Dock="Top" Margin="0,0,0,4"
                           Content="Aktuelle Notiz mitgeben" FontSize="11" IsChecked="True"
                           ToolTip="Schickt den Text der geöffneten Notiz mit (ohne Kundendaten-Kopf)"/>

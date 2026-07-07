@@ -63,6 +63,11 @@ public partial class MainWindow : Window
         Editor.VorlagenVerwaltenAngefordert += () =>
             Einstellungen_Click(this, new RoutedEventArgs());
 
+        // Dieselbe KiService-Instanz für Chat und Dashboard-Feed (Editor.Ki
+        // wurde gerade eben gesetzt — Reihenfolge beachten)
+        Dashboard.Ki = Editor.Ki;
+        Dashboard.NotizGeklickt += DashboardNotizGeklickt;
+
         ChatPanel.Ki = Editor.Ki;
         ChatPanel.HoleNotizKontext = () => Editor.KiBody();
         ChatPanel.HoleNotizAnhaenge = () => Editor.AnhangPfade();
@@ -138,7 +143,8 @@ public partial class MainWindow : Window
     {
         if (!_initialisiert || _aktualisiere || AnsichtListe.SelectedIndex < 0) return;
         _aufgabenAnsicht = AnsichtListe.SelectedIndex == 1;
-        if (!_aufgabenAnsicht)
+        SetzeDashboardSichtbar(AnsichtListe.SelectedIndex == 2);
+        if (AnsichtListe.SelectedIndex == 0)
         {
             // „Alle Notizen" hebt Notizbuch-/Tag-Filter auf
             _aktualisiere = true;
@@ -162,6 +168,7 @@ public partial class MainWindow : Window
             TagListe.SelectedIndex = -1;
             _aktualisiere = false;
             _aufgabenAnsicht = false;
+            SetzeDashboardSichtbar(false);
             _filterTag = null;
         }
         AktualisiereListe();
@@ -178,6 +185,7 @@ public partial class MainWindow : Window
             NotizbuchListe.SelectedIndex = -1;
             _aktualisiere = false;
             _aufgabenAnsicht = false;
+            SetzeDashboardSichtbar(false);
             _filterNotizbuch = null;
         }
         AktualisiereListe();
@@ -412,12 +420,14 @@ public partial class MainWindow : Window
     void SuchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (!_initialisiert) return;
-        if (_aufgabenAnsicht)
+        if (_aufgabenAnsicht || _dashboardAnsicht)
         {
+            // Tippen in der Suche wechselt zurück zur Notizansicht
             _aktualisiere = true;
             AnsichtListe.SelectedIndex = 0;
             _aktualisiere = false;
             _aufgabenAnsicht = false;
+            SetzeDashboardSichtbar(false);
         }
         AktualisiereListe();
     }
@@ -538,8 +548,47 @@ public partial class MainWindow : Window
     }
 
     void ZeigeEditorHinweis() =>
+        // Im Dashboard keinen „Keine Notiz"-Hinweis über die Ansicht legen
         EditorLeerHinweis.Visibility =
-            _aktuelleNotiz is null ? Visibility.Visible : Visibility.Collapsed;
+            _aktuelleNotiz is null && !_dashboardAnsicht
+                ? Visibility.Visible : Visibility.Collapsed;
+
+    // ---------- Dashboard ----------
+
+    bool _dashboardAnsicht;
+
+    /// <summary>Dashboard ein-/ausblenden (Editor samt Leer-Hinweis dabei
+    /// verstecken/zeigen); beim Einblenden Termine und Feed aktualisieren.
+    /// Chat-Bubble und Chat-Panel bleiben unangetastet.</summary>
+    void SetzeDashboardSichtbar(bool an)
+    {
+        if (an == _dashboardAnsicht) return;
+        _dashboardAnsicht = an;
+        Dashboard.Visibility = an ? Visibility.Visible : Visibility.Collapsed;
+        Editor.Visibility = an ? Visibility.Collapsed : Visibility.Visible;
+        ZeigeEditorHinweis();
+        if (an)
+        {
+            SpeichereAktuelle(); // damit der Kalender frische Fälligkeiten sieht
+            Dashboard.Aktualisiere(TaskService.Sammle(_store.Notizen));
+            Dashboard.LadeFeedWennAlt();
+        }
+    }
+
+    /// <summary>Termin-Klick im Dashboard: zur Notizansicht wechseln und die Quell-Notiz öffnen.</summary>
+    void DashboardNotizGeklickt(Note note)
+    {
+        _aktualisiere = true;
+        AnsichtListe.SelectedIndex = 0;
+        _aktualisiere = false;
+        _aufgabenAnsicht = false;
+        SetzeDashboardSichtbar(false);
+        _filterNotizbuch = null;
+        _filterTag = null;
+        AktualisiereListe();
+        NotizListe.SelectedItem = note;
+        OeffneNotiz(note);
+    }
 
     // ---------- Neue Notiz ----------
 

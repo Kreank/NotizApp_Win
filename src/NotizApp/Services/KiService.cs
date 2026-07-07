@@ -414,6 +414,38 @@ public class KiService
         return dateien;
     }
 
+    // ---------- Recherche (Dashboard-Feed) ----------
+
+    const string RechercheSystem =
+        "Du bist ein Recherche-Assistent für einen deutschen SHK-Handwerksbetrieb " +
+        "(Sanitär/Heizung/Klima). Du darfst und sollst im Internet recherchieren " +
+        "und nutzt dabei aktuelle, seriöse Quellen. Du antwortest AUSSCHLIESSLICH " +
+        "mit dem angeforderten JSON — ohne Markdown-Zäune, ohne Erklärungen, ohne " +
+        "Text davor oder danach.";
+
+    /// <summary>
+    /// Freie Internet-Recherche (z.B. für den Dashboard-Feed): Claude recherchiert
+    /// im Container und antwortet nur mit dem im Auftrag angeforderten JSON.
+    /// Ohne Verlauf (kein resume) und ohne /ausgabe-Mount — es entstehen keine Dateien.
+    /// </summary>
+    public async Task<string> RechercheAsync(string auftrag, CancellationToken ct)
+    {
+        var envDatei = Path.Combine(SettingsService.SettingsOrdner, "claude.env");
+        var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
+
+        var args = $"run --rm -i {envTeil}-v {ConfigVolume}:/home/claude {Image} " +
+                   $"-p --system-prompt {PsQuote(RechercheSystem)} " +
+                   "--dangerously-skip-permissions --output-format text";
+        var (code, stdout, stderr) = await StarteAsync("docker", args, auftrag, ct,
+            TimeSpan.FromMinutes(8));
+
+        if (code != 0) throw ClaudeFehler(stdout, stderr);
+        var antwort = stdout.Trim();
+        if (antwort.Length == 0)
+            throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
+        return antwort;
+    }
+
     // ---------- Bildgenerierung über die lokale Codex-CLI ----------
 
     /// <summary>Pfad zur codex.exe der Codex-Desktop-App (OpenAI), null wenn nicht installiert.</summary>

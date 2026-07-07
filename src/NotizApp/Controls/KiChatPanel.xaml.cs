@@ -47,6 +47,8 @@ public partial class KiChatPanel : UserControl
     public event Action<string>? DateiEinfuegen;
 
     readonly ObservableCollection<ChatNachricht> _nachrichten = new();
+    /// <summary>Per Drag &amp; Drop angehängte Dateien für die nächste Nachricht.</summary>
+    readonly ObservableCollection<ChatDatei> _dropAnhaenge = new();
     string? _sessionId;
     string _ausgabeOrdner;
     bool _laeuft;
@@ -56,6 +58,7 @@ public partial class KiChatPanel : UserControl
     {
         InitializeComponent();
         NachrichtenListe.ItemsSource = _nachrichten;
+        DropListe.ItemsSource = _dropAnhaenge;
         _ausgabeOrdner = NeuerAusgabeOrdner();
         if (KiService.FindeCodex() is null)
         {
@@ -117,10 +120,17 @@ public partial class KiChatPanel : UserControl
 
             StatusText.Text = "Claude arbeitet…";
             var vorher = VorhandeneDateien();
-            var anhaenge = AnhangCheck.IsChecked == true
-                ? HoleNotizAnhaenge?.Invoke() is { Count: > 0 } liste ? liste : null
-                : null;
-            var (antwort, session) = await Ki.ChatAsync(prompt, _sessionId, _ausgabeOrdner, anhaenge, _cts.Token);
+
+            // Anhänge: Häkchen = Anhänge der offenen Notiz, dazu alles per Drag & Drop
+            var anhaenge = new List<string>();
+            if (AnhangCheck.IsChecked == true && HoleNotizAnhaenge?.Invoke() is { } notizAnhaenge)
+                anhaenge.AddRange(notizAnhaenge);
+            anhaenge.AddRange(_dropAnhaenge.Select(d => d.Pfad).Where(File.Exists));
+            anhaenge = anhaenge.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var (antwort, session) = await Ki.ChatAsync(prompt, _sessionId, _ausgabeOrdner,
+                anhaenge.Count > 0 ? anhaenge : null, _cts.Token);
+            _dropAnhaenge.Clear(); // mitgeschickt — Chips leeren
             _sessionId = session;
 
             var nachricht = new ChatNachricht { VonMir = false, Text = antwort };
@@ -219,6 +229,35 @@ public partial class KiChatPanel : UserControl
 
     void ZeigeFehler(string text) =>
         _nachrichten.Add(new ChatNachricht { IstFehler = true, Text = $"⚠ {text}" });
+
+    // ---------- Dateien in den Chat ziehen ----------
+
+    void Chat_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    void Chat_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        foreach (var pfad in (string[])e.Data.GetData(DataFormats.FileDrop))
+        {
+            if (!File.Exists(pfad)) continue;
+            if (_dropAnhaenge.Any(d => d.Pfad.Equals(pfad, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            _dropAnhaenge.Add(new ChatDatei(pfad));
+        }
+        e.Handled = true;
+    }
+
+    void DropEntfernen_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ChatDatei datei)
+            _dropAnhaenge.Remove(datei);
+    }
 
     HashSet<string> VorhandeneDateien() =>
         Directory.Exists(_ausgabeOrdner)
