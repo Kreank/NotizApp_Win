@@ -427,8 +427,11 @@ public partial class NoteEditor : UserControl
 
     // ---------- Übernahme aus dem KI-Chat ----------
 
-    /// <summary>Titel + KI-Body der aktuellen Notiz (nie der Kundendaten-Kopf); null wenn leer.</summary>
-    public (string Titel, string Body)? KiKontext()
+    /// <summary>KI-Body der aktuellen Notiz; null wenn leer/keine Notiz.
+    /// Datenschutz-Grundsatz: NUR Textelemente + erkannte Handschrift — der
+    /// komplette Frontmatter-Kopf inklusive Titel bleibt lokal (Titel kann
+    /// Kundennamen enthalten, z.B. aus der Schnellerfassung).</summary>
+    public string? KiBody()
     {
         if (_note is null) return null;
         var body = KiService.ErzeugeKiBody(
@@ -436,9 +439,7 @@ public partial class NoteEditor : UserControl
                 .OrderBy(t => t.Y).ThenBy(t => t.X)
                 .Select(t => t.Text),
             _tintenText);
-        if (string.IsNullOrWhiteSpace(body)) return null;
-        var titel = TitelBox.Text.Trim();
-        return (titel.Length == 0 ? "(ohne Titel)" : titel, body);
+        return string.IsNullOrWhiteSpace(body) ? null : body;
     }
 
     /// <summary>Text als neues Textfeld unten an die Notiz anfügen (z.B. Chat-Antwort).</summary>
@@ -665,7 +666,7 @@ public partial class NoteEditor : UserControl
 
     string? AktuellerKiBody()
     {
-        if (KiKontext() is { } kontext) return kontext.Body;
+        if (KiBody() is { } body) return body;
         MessageBox.Show(Window.GetWindow(this)!,
             "Die Notiz enthält noch keinen Text, den die KI verarbeiten könnte.",
             "NotizApp", MessageBoxButton.OK, MessageBoxImage.Information);

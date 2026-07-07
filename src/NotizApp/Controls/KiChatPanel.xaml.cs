@@ -34,8 +34,9 @@ public partial class KiChatPanel : UserControl
     /// <summary>Wird vom Host gesetzt (dieselbe Instanz wie im Editor).</summary>
     public KiService? Ki { get; set; }
 
-    /// <summary>Liefert Titel + KI-Body der aktuellen Notiz, oder null wenn keine offen/leer.</summary>
-    public Func<(string Titel, string Body)?>? HoleNotizKontext { get; set; }
+    /// <summary>Liefert den KI-Body der aktuellen Notiz (nur Text/Handschrift —
+    /// nie Kopf oder Titel), oder null wenn keine Notiz offen/leer.</summary>
+    public Func<string?>? HoleNotizKontext { get; set; }
 
     /// <summary>Text soll unten an die aktuelle Notiz angefügt werden.</summary>
     public event Action<string>? TextEinfuegen;
@@ -81,11 +82,12 @@ public partial class KiChatPanel : UserControl
         _nachrichten.Add(new ChatNachricht { VonMir = true, Text = frage });
         ScrolleAnsEnde();
 
-        // Notiz-Kontext (nur Body, nie Kundendaten) vor die erste Frage setzen
+        // Notiz-Kontext voranstellen — bewusst ohne Titel: der gehört zum
+        // Frontmatter-Kopf und kann Kundennamen enthalten
         var prompt = frage;
         if (KontextCheck.IsChecked == true && HoleNotizKontext?.Invoke() is { } kontext)
         {
-            prompt = $"Meine aktuell geöffnete Notiz „{kontext.Titel}“:\n\n{kontext.Body}\n\n---\n\n{frage}";
+            prompt = $"Meine aktuell geöffnete Notiz:\n\n{kontext}\n\n---\n\n{frage}";
         }
 
         _laeuft = true;
