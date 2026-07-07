@@ -227,6 +227,9 @@ public static partial class Frontmatter
                         Titel = attrs.GetValueOrDefault("titel", ""),
                         Hoehe = Zahl("h", 76),
                         VorschauDatei = attrs.GetValueOrDefault("vorschau", ""),
+                        VorschauScroll = Zahl("vscroll", 0),
+                        VorschauEingepasst =
+                            attrs.GetValueOrDefault("vmodus", "") == "einpassen",
                     },
                     "tabelle" => new TabelleElement
                     {
@@ -522,6 +525,10 @@ public static partial class Frontmatter
                     sb.Append($"<!--el link {pos} h={(int)l.Hoehe} url=\"{url}\" titel=\"{titel}\"");
                     if (!string.IsNullOrWhiteSpace(l.VorschauDatei))
                         sb.Append($" vorschau=\"{l.VorschauDatei}\"");
+                    if (l.VorschauScroll > 0.001)
+                        sb.Append($" vscroll={l.VorschauScroll.ToString("0.###", inv)}");
+                    if (l.VorschauEingepasst)
+                        sb.Append(" vmodus=\"einpassen\"");
                     sb.Append("-->\n\n");
                     break;
                 case TabelleElement tab when tab.Zeilen.Count > 0:

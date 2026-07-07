@@ -73,6 +73,10 @@ public class LinkElement : NoteElement
     public double Hoehe { get; set; } = 76;
     /// <summary>Screenshot der Seite (Dateiname neben der .md), leer = keine Vorschau.</summary>
     public string VorschauDatei { get; set; } = "";
+    /// <summary>Scroll-Position der Vorschau im Füllen-Modus, relativ 0..1.</summary>
+    public double VorschauScroll { get; set; }
+    /// <summary>true = ganze Seite eingepasst (Letterbox) statt füllendem Ausschnitt.</summary>
+    public bool VorschauEingepasst { get; set; }
 }
 
 /// <summary>Tabelle auf der Fläche: Zeilen mit Textzellen, erste Zeile ist die

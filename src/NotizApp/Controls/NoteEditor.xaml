@@ -355,18 +355,30 @@
         <!-- ===== Link-Element (Web-Clip-Karte) ===== -->
         <DataTemplate DataType="{x:Type local:LinkElementVm}">
             <Grid Width="{Binding Breite}" Height="{Binding Hoehe}" Background="Transparent"
-                  PreviewMouseLeftButtonDown="LinkElement_MouseDown">
+                  PreviewMouseLeftButtonDown="LinkElement_MouseDown"
+                  MouseWheel="LinkElement_MouseWheel">
                 <Border Background="{DynamicResource AppFlaecheBrush}"
                         CornerRadius="6" BorderThickness="1"
                         BorderBrush="{DynamicResource AppRandBrush}"
                         ToolTip="Doppelklick: Link im Browser öffnen">
                     <Grid>
-                        <!-- Gerenderte Seiten-Vorschau (falls vorhanden) über der Titelzeile -->
+                        <!-- Gerenderte Seiten-Vorschau (falls vorhanden) über der Titelzeile.
+                             Füllen-Modus: Bild in Rahmenbreite, oben ausgerichtet, per
+                             Mausrad im Rahmen scrollbar (TranslateTransform im Code). -->
                         <Border x:Name="VorschauRahmen" Visibility="Collapsed"
                                 Margin="1,1,1,52" ClipToBounds="True"
-                                CornerRadius="5,5,0,0" Background="White">
-                            <Image Source="{Binding Vorschau}" Stretch="UniformToFill"
-                                   VerticalAlignment="Top"/>
+                                CornerRadius="5,5,0,0" Background="White"
+                                SizeChanged="LinkVorschau_SizeChanged">
+                            <Image x:Name="VorschauBild" Source="{Binding Vorschau}"
+                                   Stretch="Uniform"
+                                   Width="{Binding ActualWidth,
+                                       RelativeSource={RelativeSource AncestorType=Border}}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                                   SizeChanged="LinkVorschau_SizeChanged">
+                                <Image.RenderTransform>
+                                    <TranslateTransform/>
+                                </Image.RenderTransform>
+                            </Image>
                         </Border>
                         <DockPanel x:Name="TitelZeile" Margin="8,0" VerticalAlignment="Center">
                             <TextBlock DockPanel.Dock="Left" Text="🔗" FontSize="22"
@@ -400,6 +412,11 @@
                         ToolTip="Titel und Vorschau neu laden"
                         HorizontalAlignment="Right" VerticalAlignment="Top"
                         Margin="4,4,28,4" Click="LinkNeuLaden_Click"/>
+                <Button x:Name="ModusKnopf" Content="⤢" Opacity="0"
+                        Style="{StaticResource LoeschKnopf}" Visibility="Collapsed"
+                        ToolTip="Ganze Seite einpassen / Ausschnitt füllen"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="4,4,52,4" Click="LinkModus_Click"/>
                 <Button x:Name="PdfKnopf" Content="⬇ PDF" Opacity="0" FontSize="11"
                         Style="{StaticResource LoeschKnopf}"
                         ToolTip="Seite als PDF neben der Notiz sichern"
@@ -415,15 +432,23 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter TargetName="Loeschen" Property="Opacity" Value="1"/>
                     <Setter TargetName="NeuLadenKnopf" Property="Opacity" Value="1"/>
+                    <Setter TargetName="ModusKnopf" Property="Opacity" Value="1"/>
                     <Setter TargetName="PdfKnopf" Property="Opacity" Value="1"/>
                     <Setter TargetName="EckGriff" Property="Opacity" Value="0.8"/>
                 </Trigger>
                 <!-- Mit Vorschau: Bild füllt die Karte, Titelzeile kompakt darunter -->
                 <DataTrigger Binding="{Binding HatVorschau}" Value="True">
                     <Setter TargetName="VorschauRahmen" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ModusKnopf" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="TitelZeile" Property="VerticalAlignment" Value="Bottom"/>
                     <Setter TargetName="TitelZeile" Property="Height" Value="52"/>
                     <Setter TargetName="TitelText" Property="TextWrapping" Value="NoWrap"/>
+                </DataTrigger>
+                <!-- Einpassen-Modus: ganze Seite sichtbar (Letterbox), Scrollen inaktiv -->
+                <DataTrigger Binding="{Binding VorschauEingepasst}" Value="True">
+                    <Setter TargetName="VorschauBild" Property="Width" Value="Auto"/>
+                    <Setter TargetName="VorschauBild" Property="HorizontalAlignment" Value="Center"/>
+                    <Setter TargetName="VorschauBild" Property="VerticalAlignment" Value="Center"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

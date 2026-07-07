@@ -1106,6 +1106,81 @@ public partial class NoteEditor : UserControl
         PasseHoeheAn();
     }
 
+    // ---------- Link-Vorschau: Scrollen im Rahmen + Füllen/Einpassen ----------
+
+    /// <summary>Scroll-Position (0..1) als TranslateTransform.Y aufs Vorschaubild
+    /// anwenden — geclampt auf den Überstand (Bildhöhe minus Rahmenhöhe).</summary>
+    static void WendeLinkScrollAn(Border rahmen, Image bild, LinkElementVm vm)
+    {
+        if (bild.RenderTransform is not TranslateTransform verschiebung) return;
+        double ueberstand = Math.Max(0, bild.ActualHeight - rahmen.ActualHeight);
+        verschiebung.Y = vm.VorschauEingepasst
+            ? 0
+            : -Math.Clamp(vm.VorschauScroll, 0, 1) * ueberstand;
+    }
+
+    /// <summary>Vorschaubild + Rahmen einer Link-Karte im Template finden.</summary>
+    static (Border Rahmen, Image Bild)? FindeLinkVorschau(DependencyObject wurzel) =>
+        FindeKind<Image>(wurzel) is { } bild && bild.Parent is Border rahmen
+            ? (rahmen, bild)
+            : null;
+
+    /// <summary>Nach jedem Layout (Bild geladen, Karte skaliert) den Scroll nachziehen.</summary>
+    void LinkVorschau_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not LinkElementVm vm) return;
+        var teile = sender switch
+        {
+            Image bild when bild.Parent is Border rahmen => (rahmen, bild),
+            Border rahmen => FindeLinkVorschau(rahmen),
+            _ => ((Border, Image)?)null,
+        };
+        if (teile is { } t) WendeLinkScrollAn(t.Item1, t.Item2, vm);
+    }
+
+    /// <summary>Mausrad über der Vorschau: Seite im Rahmen scrollen (nur im
+    /// Füllen-Modus und nur, wenn das Bild höher als der Rahmen ist — sonst
+    /// scrollt das Rad weiter die Notiz-Fläche).</summary>
+    void LinkElement_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (VmVon<LinkElementVm>(sender) is not { } vm) return;
+        if (!vm.HatVorschau || vm.VorschauEingepasst) return;
+        if (sender is not DependencyObject wurzel) return;
+        if (FindeLinkVorschau(wurzel) is not { } teile) return;
+        var (rahmen, bild) = teile;
+
+        // Nur wenn der Zeiger wirklich über der Vorschau steht (nicht Titelzeile)
+        var pos = e.GetPosition(rahmen);
+        if (pos.X < 0 || pos.Y < 0 ||
+            pos.X > rahmen.ActualWidth || pos.Y > rahmen.ActualHeight)
+        {
+            return;
+        }
+
+        double ueberstand = bild.ActualHeight - rahmen.ActualHeight;
+        if (ueberstand < 1) return; // nichts zu scrollen → Fläche scrollt weiter
+
+        // Eine Rad-Rastung (Delta 120) verschiebt das Bild um ~60 px
+        vm.VorschauScroll -= e.Delta / 120.0 * 60.0 / ueberstand;
+        WendeLinkScrollAn(rahmen, bild, vm);
+        MeldeAenderung();
+        e.Handled = true;
+    }
+
+    /// <summary>„⤢": zwischen füllendem Ausschnitt (scrollbar) und ganzer
+    /// eingepasster Seite (Letterbox) umschalten.</summary>
+    void LinkModus_Click(object sender, RoutedEventArgs e)
+    {
+        if (VmVon<LinkElementVm>(sender) is not { } vm || !vm.HatVorschau) return;
+        vm.VorschauEingepasst = !vm.VorschauEingepasst;
+        // Transform sofort nachziehen (Layout-Wechsel feuert nicht in jedem Fall)
+        if (_hosts.TryGetValue(vm, out var host) &&
+            FindeLinkVorschau(host) is { } vorschau)
+        {
+            WendeLinkScrollAn(vorschau.Rahmen, vorschau.Bild, vm);
+        }
+    }
+
     /// <summary>Domain der Karte als dateinamens-tauglicher Baustein ("seite" als Fallback).</summary>
     static string DateiTauglicheDomain(LinkElementVm vm)
     {
@@ -1160,7 +1235,7 @@ public partial class NoteEditor : UserControl
             try { System.IO.File.Delete(temp); } catch { }
 
             var ok = await StarteEdgeHeadlessAsync(edge,
-                $"--headless --disable-gpu --screenshot=\"{temp}\" --window-size=1280,900 --hide-scrollbars \"{url}\"",
+                $"--headless --disable-gpu --screenshot=\"{temp}\" --window-size=1280,2400 --hide-scrollbars \"{url}\"",
                 TimeSpan.FromSeconds(45));
             if (!ok || _note is null || !_elemente.Contains(vm) ||
                 !System.IO.File.Exists(temp) || new System.IO.FileInfo(temp).Length == 0)

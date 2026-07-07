@@ -375,6 +375,35 @@ public class LinkElementVm : ElementVm
     /// <summary>Dateiname des Seiten-Screenshots neben der Notiz, leer = keine Vorschau.</summary>
     public string VorschauDatei { get; set; } = "";
 
+    double _vorschauScroll;
+    /// <summary>Scroll-Position der Vorschau im Füllen-Modus, relativ 0..1.</summary>
+    public double VorschauScroll
+    {
+        get => _vorschauScroll;
+        set
+        {
+            value = Math.Clamp(value, 0, 1);
+            if (Math.Abs(_vorschauScroll - value) < 0.0005) return;
+            _vorschauScroll = value;
+            OnChanged();
+            MeldeGeaendert();
+        }
+    }
+
+    bool _vorschauEingepasst;
+    /// <summary>true = ganze Seite eingepasst (Letterbox), Scrollen inaktiv.</summary>
+    public bool VorschauEingepasst
+    {
+        get => _vorschauEingepasst;
+        set
+        {
+            if (_vorschauEingepasst == value) return;
+            _vorschauEingepasst = value;
+            OnChanged();
+            MeldeGeaendert();
+        }
+    }
+
     ImageSource? _vorschau;
     /// <summary>Gerenderte Seiten-Vorschau (null = 🔗-Karte ohne Bild).</summary>
     public ImageSource? Vorschau
@@ -418,6 +447,8 @@ public class LinkElementVm : ElementVm
         _titel = el.Titel;
         _hoehe = Math.Max(MinHoehe, el.Hoehe);
         VorschauDatei = el.VorschauDatei;
+        _vorschauScroll = Math.Clamp(el.VorschauScroll, 0, 1);
+        _vorschauEingepasst = el.VorschauEingepasst;
     }
 
     public override NoteElement ZuModel()
@@ -428,6 +459,8 @@ public class LinkElementVm : ElementVm
             Titel = Titel,
             Hoehe = Hoehe,
             VorschauDatei = VorschauDatei,
+            VorschauScroll = VorschauScroll,
+            VorschauEingepasst = VorschauEingepasst,
         };
         UebernehmePosition(el);
         return el;
