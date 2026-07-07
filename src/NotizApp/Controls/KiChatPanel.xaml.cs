@@ -60,11 +60,6 @@ public partial class KiChatPanel : UserControl
         NachrichtenListe.ItemsSource = _nachrichten;
         DropListe.ItemsSource = _dropAnhaenge;
         _ausgabeOrdner = NeuerAusgabeOrdner();
-        if (KiService.FindeCodex() is null)
-        {
-            BildButton.IsEnabled = false;
-            BildButton.ToolTip = "Bildgenerierung nicht verfügbar: Codex-Desktop-App (OpenAI) nicht gefunden.";
-        }
     }
 
     static string NeuerAusgabeOrdner() =>
@@ -158,7 +153,7 @@ public partial class KiChatPanel : UserControl
         }
     }
 
-    /// <summary>🎨: Eingabetext als Bildauftrag an die lokale Codex-CLI statt an Claude.</summary>
+    /// <summary>🎨: Eingabetext als Bildauftrag an den Codex-Container statt an Claude.</summary>
     async void BildGenerieren_Click(object sender, RoutedEventArgs e)
     {
         if (_laeuft || Ki is null) return;
@@ -180,20 +175,33 @@ public partial class KiChatPanel : UserControl
         BildButton.IsEnabled = false;
         AbbrechenButton.Visibility = Visibility.Visible;
 
-        // Mitlaufende Uhr: Bildgenerierung dauert oft 2–4 Minuten — ohne sichtbaren
-        // Fortschritt wirkt das schnell wie ein Hänger
         var startZeit = DateTime.Now;
-        StatusText.Text = "Codex generiert Bild… (dauert oft 2–4 Minuten)";
-        var uhr = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(1),
-        };
-        uhr.Tick += (_, _) => StatusText.Text =
-            $"Codex generiert Bild… {DateTime.Now - startZeit:m\\:ss} (dauert oft 2–4 Minuten)";
-        uhr.Start();
+        System.Windows.Threading.DispatcherTimer? uhr = null;
         try
         {
-            // Läuft lokal (Codex-App) — Docker wird hierfür nicht gebraucht
+            // Bildgenerierung läuft im Codex-Container → Docker muss laufen
+            if (await Ki.StelleDockerBereitAsync(s => StatusText.Text = s, _cts.Token) is string dockerProblem)
+            {
+                ZeigeFehler(dockerProblem);
+                return;
+            }
+            if (await Ki.PruefeCodexVerfuegbarAsync() is string problem)
+            {
+                ZeigeFehler(problem);
+                return;
+            }
+
+            // Mitlaufende Uhr: Bildgenerierung dauert oft 2–4 Minuten — ohne
+            // sichtbaren Fortschritt wirkt das schnell wie ein Hänger
+            StatusText.Text = "Codex generiert Bild… (dauert oft 2–4 Minuten)";
+            uhr = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1),
+            };
+            uhr.Tick += (_, _) => StatusText.Text =
+                $"Codex generiert Bild… {DateTime.Now - startZeit:m\\:ss} (dauert oft 2–4 Minuten)";
+            uhr.Start();
+
             var dateien = await Ki.GeneriereBilderAsync(auftrag, _ausgabeOrdner, _cts.Token);
             var nachricht = new ChatNachricht
             {
@@ -215,12 +223,12 @@ public partial class KiChatPanel : UserControl
         }
         finally
         {
-            uhr.Stop();
+            uhr?.Stop();
             _laeuft = false;
             _cts = null;
             StatusText.Text = "";
             SendenButton.IsEnabled = true;
-            BildButton.IsEnabled = KiService.FindeCodex() is not null;
+            BildButton.IsEnabled = true;
             AbbrechenButton.Visibility = Visibility.Collapsed;
             ScrolleAnsEnde();
             EingabeBox.Focus();

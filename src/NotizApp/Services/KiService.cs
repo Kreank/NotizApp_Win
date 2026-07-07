@@ -10,15 +10,21 @@ public enum KiAktion { Zusammenfassen, Aufbereiten, Aufgaben }
 /// <summary>
 /// KI-Anbindung (V2): Claude läuft headless in einem Docker-Container
 /// (Image "notizapp-claude", Login im Volume "notizapp-claude-config").
+/// Die Bildgenerierung läuft in einem eigenen Codex-Container (OpenAI,
+/// Image "notizapp-codex", Abo-Login im Volume "notizapp-codex-config").
 ///
 /// Datenschutz: Es wird ausschließlich der Notiz-Body übergeben — ohne
-/// Frontmatter-Kopf, also ohne Kundendaten. Der Container hat keinerlei
+/// Frontmatter-Kopf, also ohne Kundendaten. Die Container haben keinerlei
 /// Zugriff auf den Notizen-Ordner.
 /// </summary>
 public class KiService
 {
     const string Image = "notizapp-claude";
     const string ConfigVolume = "notizapp-claude-config";
+    // Bildgenerierung läuft in einem eigenen Container (OpenAI-Codex, Abo-Login
+    // im Volume "notizapp-codex-config"). Aufbau wie beim Claude-Container.
+    const string CodexImage = "notizapp-codex";
+    const string CodexConfigVolume = "notizapp-codex-config";
     static readonly TimeSpan Zeitlimit = TimeSpan.FromSeconds(180);
 
     /// <summary>
@@ -137,6 +143,27 @@ public class KiService
         {
             return "Docker wurde nicht gefunden oder läuft nicht.\n\n" +
                    "Bitte Docker Desktop starten und ggf. einmalig\n    .\\docker\\einrichten.ps1\nausführen.";
+        }
+    }
+
+    /// <summary>Prüft, ob der Codex-Container (Bildgenerierung) eingerichtet ist.
+    /// Liefert null wenn ok, sonst einen Hinweistext.</summary>
+    public async Task<string?> PruefeCodexVerfuegbarAsync()
+    {
+        try
+        {
+            var (code, _, _) = await StarteAsync("docker",
+                $"image inspect {CodexImage}", stdin: null, CancellationToken.None,
+                TimeSpan.FromSeconds(15));
+            return code == 0
+                ? null
+                : "Der Codex-Container (Bildgenerierung) ist noch nicht eingerichtet.\n\n" +
+                  "Einmalig im Projektordner ausführen:\n    .\\docker\\codex\\einrichten.ps1";
+        }
+        catch (Exception)
+        {
+            return "Docker wurde nicht gefunden oder läuft nicht.\n\n" +
+                   "Bitte Docker Desktop starten und ggf. einmalig\n    .\\docker\\codex\\einrichten.ps1\nausführen.";
         }
     }
 
@@ -446,110 +473,85 @@ public class KiService
         return antwort;
     }
 
-    // ---------- Bildgenerierung über die lokale Codex-CLI ----------
-
-    /// <summary>Pfad zur codex.exe der Codex-Desktop-App (OpenAI), null wenn nicht installiert.</summary>
-    public static string? FindeCodex()
-    {
-        try
-        {
-            var bin = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "OpenAI", "Codex", "bin");
-            if (!Directory.Exists(bin)) return null;
-            return Directory.EnumerateFiles(bin, "codex.exe", SearchOption.AllDirectories)
-                .OrderByDescending(File.GetLastWriteTimeUtc)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    static string CodexBilderOrdner => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".codex", "generated_images");
+    // ---------- Bildgenerierung über den Codex-Container ----------
 
     /// <summary>
-    /// KI-generierte Bilder (Fotos/Illustrationen/Logos) über die lokale
-    /// Codex-CLI erzeugen (imagegen-Werkzeug des Codex-Abos). Codex läuft
-    /// read-only in einem leeren Ordner und bekommt ausschließlich den
-    /// Auftragstext — keine Notizen. Das image_gen-Werkzeug legt die PNGs
-    /// unter ~/.codex/generated_images/&lt;session&gt;/ ab; von dort kopiert
-    /// die App sie in den Ausgabeordner und liefert die Pfade zurück.
+    /// KI-generierte Bilder (Fotos/Illustrationen/Logos) über den Codex-Container
+    /// erzeugen (imagegen-Werkzeug des Codex-Abos). Codex läuft read-only und
+    /// bekommt ausschließlich den Auftragstext — keine Notizen. Das image_gen-
+    /// Werkzeug legt die PNGs im Container unter ~/.codex/generated_images/&lt;session&gt;/
+    /// ab; dieser Pfad ist auf einen frischen Host-Ordner gemountet, aus dem die
+    /// App die Bilder mit sprechenden Namen in den Ausgabeordner kopiert.
+    /// Der Abo-Login liegt im Volume "notizapp-codex-config".
     /// </summary>
     public async Task<List<string>> GeneriereBilderAsync(
         string auftrag, string ausgabeOrdner, CancellationToken ct)
     {
-        var codex = FindeCodex() ?? throw new InvalidOperationException(
-            "Die Codex-App (OpenAI) wurde nicht gefunden — sie übernimmt die Bildgenerierung.\n" +
-            "Bitte die Codex-Desktop-App installieren und anmelden.");
         Directory.CreateDirectory(ausgabeOrdner);
+
+        // Frischer Auffang-Ordner pro Aufruf: wird im Container auf
+        // ~/.codex/generated_images gemountet, sodass alle darin landenden
+        // Bilder eindeutig zu diesem Auftrag gehören (kein Zeitstempel-Rätsel).
+        var rohOrdner = Path.Combine(Path.GetTempPath(), "NotizApp-Codex",
+            $"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(rohOrdner);
 
         var prompt =
             "Generiere mit deiner Bildgenerierungs-Fähigkeit (imagegen / image_gen) die " +
             "gewünschten Bilder. Kopiere oder verschiebe KEINE Dateien (die Sitzung ist " +
             "read-only) — die generierten Bilder werden automatisch abgeholt. " +
             $"Auftrag: {auftrag}";
-        var args = $"exec -C {PsQuote(ausgabeOrdner)} --skip-git-repo-check " +
+        // -i: leeres stdin wird durchgereicht und geschlossen, sonst wartet
+        // codex exec auf Eingabe. Nur der Roh-Ordner wird beschrieben, sonst
+        // hat der Container keinen Zugriff auf den PC.
+        var args = $"run --rm -i -v {CodexConfigVolume}:/home/codex " +
+                   $"-v {PsQuote(rohOrdner + ":/home/codex/.codex/generated_images")} " +
+                   $"{CodexImage} exec -C /home/codex/arbeit --skip-git-repo-check " +
                    $"-s read-only {PsQuote(prompt)}";
 
-        // stdin leer übergeben und schließen — sonst wartet codex exec auf Eingabe
-        var startZeit = DateTime.UtcNow.AddMinutes(-1); // kleine Uhren-Toleranz
-        var (code, stdout, stderr) = await StarteAsync(codex, args, "", ct,
-            TimeSpan.FromMinutes(8));
-        if (code != 0)
+        try
         {
-            var fehler = (stderr.Trim().Length > 0 ? stderr : stdout).Trim();
-            if (fehler.Length > 400) fehler = fehler[^400..];
-            throw new InvalidOperationException($"Codex-Aufruf fehlgeschlagen:\n{fehler}");
-        }
+            var (code, stdout, stderr) = await StarteAsync("docker", args, "", ct,
+                TimeSpan.FromMinutes(8));
+            if (code != 0)
+            {
+                var fehler = (stderr.Trim().Length > 0 ? stderr : stdout).Trim();
+                if (fehler.Length > 400) fehler = fehler[^400..];
+                throw new InvalidOperationException($"Codex-Aufruf fehlgeschlagen:\n{fehler}");
+            }
 
-        // Session-Ordner aus dem Kopf der exec-Ausgabe ("session id: <uuid>";
-        // das Format hat sich zwischen Codex-Versionen schon geändert, daher tolerant)
-        var session = System.Text.RegularExpressions.Regex.Match(
-            stdout + "\n" + stderr, @"(?:session|conversation)[ _]?id:?\s+([0-9a-f\-]{16,})",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        var quelle = session.Success
-            ? Path.Combine(CodexBilderOrdner, session.Groups[1].Value)
-            : null;
-        var bilder = quelle is not null && Directory.Exists(quelle)
-            ? Directory.EnumerateFiles(quelle).Where(IstBildDatei).OrderBy(f => f).ToList()
-            : new List<string>();
-
-        // Fallback: liefert der Kopf keine Session-ID (mehr), nehmen wir alle Bilder,
-        // die seit dem Start dieses Aufrufs unter generated_images entstanden sind
-        if (bilder.Count == 0 && Directory.Exists(CodexBilderOrdner))
-        {
-            bilder = Directory
-                .EnumerateFiles(CodexBilderOrdner, "*", SearchOption.AllDirectories)
+            // Alle Bilder im Roh-Ordner stammen aus genau diesem Aufruf.
+            var bilder = Directory
+                .EnumerateFiles(rohOrdner, "*", SearchOption.AllDirectories)
                 .Where(IstBildDatei)
-                .Where(f => File.GetLastWriteTimeUtc(f) >= startZeit)
                 .OrderBy(File.GetLastWriteTimeUtc)
                 .ToList();
-        }
 
-        if (bilder.Count == 0)
-        {
-            var antwort = stdout.Trim();
-            if (antwort.Length > 400) antwort = antwort[^400..];
-            throw new InvalidOperationException(
-                $"Es wurde kein generiertes Bild gefunden (unter {CodexBilderOrdner}).\n\n" +
-                $"Codex-Antwort:\n{antwort}");
-        }
+            if (bilder.Count == 0)
+            {
+                var antwort = stdout.Trim();
+                if (antwort.Length > 400) antwort = antwort[^400..];
+                throw new InvalidOperationException(
+                    "Es wurde kein generiertes Bild gefunden.\n\n" +
+                    $"Codex-Antwort:\n{antwort}");
+            }
 
-        // In den Austauschordner kopieren (sprechende Namen statt ig_<hash>.png)
-        var ziele = new List<string>();
-        int n = 1;
-        foreach (var bild in bilder)
-        {
-            var ziel = Path.Combine(ausgabeOrdner,
-                $"bild-{DateTime.Now:HHmmss}-{n++}{Path.GetExtension(bild)}");
-            File.Copy(bild, ziel, overwrite: true);
-            ziele.Add(ziel);
+            // In den Austauschordner kopieren (sprechende Namen statt ig_<hash>.png)
+            var ziele = new List<string>();
+            int n = 1;
+            foreach (var bild in bilder)
+            {
+                var ziel = Path.Combine(ausgabeOrdner,
+                    $"bild-{DateTime.Now:HHmmss}-{n++}{Path.GetExtension(bild)}");
+                File.Copy(bild, ziel, overwrite: true);
+                ziele.Add(ziel);
+            }
+            return ziele;
         }
-        return ziele;
+        finally
+        {
+            try { Directory.Delete(rohOrdner, recursive: true); } catch { /* Aufräumen best effort */ }
+        }
     }
 
     static bool IstBildDatei(string f) =>
