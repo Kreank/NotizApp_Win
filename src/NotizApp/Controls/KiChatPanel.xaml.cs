@@ -54,6 +54,11 @@ public partial class KiChatPanel : UserControl
         InitializeComponent();
         NachrichtenListe.ItemsSource = _nachrichten;
         _ausgabeOrdner = NeuerAusgabeOrdner();
+        if (KiService.FindeCodex() is null)
+        {
+            BildButton.IsEnabled = false;
+            BildButton.ToolTip = "Bildgenerierung nicht verfügbar: Codex-Desktop-App (OpenAI) nicht gefunden.";
+        }
     }
 
     static string NeuerAusgabeOrdner() =>
@@ -131,6 +136,63 @@ public partial class KiChatPanel : UserControl
             _cts = null;
             StatusText.Text = "";
             SendenButton.IsEnabled = true;
+            AbbrechenButton.Visibility = Visibility.Collapsed;
+            ScrolleAnsEnde();
+            EingabeBox.Focus();
+        }
+    }
+
+    /// <summary>🎨: Eingabetext als Bildauftrag an die lokale Codex-CLI statt an Claude.</summary>
+    async void BildGenerieren_Click(object sender, RoutedEventArgs e)
+    {
+        if (_laeuft || Ki is null) return;
+        var auftrag = EingabeBox.Text.Trim();
+        if (auftrag.Length == 0)
+        {
+            ZeigeFehler("Erst die Bildbeschreibung ins Eingabefeld tippen, dann 🎨 drücken.");
+            return;
+        }
+
+        EingabeBox.Clear();
+        LeerHinweis.Visibility = Visibility.Collapsed;
+        _nachrichten.Add(new ChatNachricht { VonMir = true, Text = $"🎨 {auftrag}" });
+        ScrolleAnsEnde();
+
+        _laeuft = true;
+        _cts = new CancellationTokenSource();
+        SendenButton.IsEnabled = false;
+        BildButton.IsEnabled = false;
+        AbbrechenButton.Visibility = Visibility.Visible;
+        StatusText.Text = "Codex generiert Bild…";
+        try
+        {
+            // Läuft lokal (Codex-App) — Docker wird hierfür nicht gebraucht
+            var dateien = await Ki.GeneriereBilderAsync(auftrag, _ausgabeOrdner, _cts.Token);
+            var nachricht = new ChatNachricht
+            {
+                Text = dateien.Count == 1
+                    ? "Bild erstellt — mit 📌 in die Notiz legen oder mit 💾 speichern."
+                    : $"{dateien.Count} Bilder erstellt — mit 📌 in die Notiz legen oder mit 💾 speichern.",
+            };
+            foreach (var datei in dateien)
+                nachricht.Dateien.Add(new ChatDatei(datei));
+            _nachrichten.Add(nachricht);
+        }
+        catch (OperationCanceledException)
+        {
+            ZeigeFehler("Abgebrochen.");
+        }
+        catch (Exception ex)
+        {
+            ZeigeFehler(ex.Message);
+        }
+        finally
+        {
+            _laeuft = false;
+            _cts = null;
+            StatusText.Text = "";
+            SendenButton.IsEnabled = true;
+            BildButton.IsEnabled = KiService.FindeCodex() is not null;
             AbbrechenButton.Visibility = Visibility.Collapsed;
             ScrolleAnsEnde();
             EingabeBox.Focus();

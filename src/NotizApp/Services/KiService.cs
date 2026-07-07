@@ -313,6 +313,101 @@ public class KiService
         return dateien;
     }
 
+    // ---------- Bildgenerierung über die lokale Codex-CLI ----------
+
+    /// <summary>Pfad zur codex.exe der Codex-Desktop-App (OpenAI), null wenn nicht installiert.</summary>
+    public static string? FindeCodex()
+    {
+        try
+        {
+            var bin = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "OpenAI", "Codex", "bin");
+            if (!Directory.Exists(bin)) return null;
+            return Directory.EnumerateFiles(bin, "codex.exe", SearchOption.AllDirectories)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static string CodexBilderOrdner => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".codex", "generated_images");
+
+    /// <summary>
+    /// KI-generierte Bilder (Fotos/Illustrationen/Logos) über die lokale
+    /// Codex-CLI erzeugen (imagegen-Werkzeug des Codex-Abos). Codex läuft
+    /// read-only in einem leeren Ordner und bekommt ausschließlich den
+    /// Auftragstext — keine Notizen. Das image_gen-Werkzeug legt die PNGs
+    /// unter ~/.codex/generated_images/&lt;session&gt;/ ab; von dort kopiert
+    /// die App sie in den Ausgabeordner und liefert die Pfade zurück.
+    /// </summary>
+    public async Task<List<string>> GeneriereBilderAsync(
+        string auftrag, string ausgabeOrdner, CancellationToken ct)
+    {
+        var codex = FindeCodex() ?? throw new InvalidOperationException(
+            "Die Codex-App (OpenAI) wurde nicht gefunden — sie übernimmt die Bildgenerierung.\n" +
+            "Bitte die Codex-Desktop-App installieren und anmelden.");
+        Directory.CreateDirectory(ausgabeOrdner);
+
+        var prompt =
+            "Generiere mit deiner Bildgenerierungs-Fähigkeit (imagegen / image_gen) die " +
+            "gewünschten Bilder. Kopiere oder verschiebe KEINE Dateien (die Sitzung ist " +
+            "read-only) — die generierten Bilder werden automatisch abgeholt. " +
+            $"Auftrag: {auftrag}";
+        var args = $"exec -C {PsQuote(ausgabeOrdner)} --skip-git-repo-check " +
+                   $"-s read-only {PsQuote(prompt)}";
+
+        // stdin leer übergeben und schließen — sonst wartet codex exec auf Eingabe
+        var (code, stdout, stderr) = await StarteAsync(codex, args, "", ct,
+            TimeSpan.FromMinutes(8));
+        if (code != 0)
+        {
+            var fehler = (stderr.Trim().Length > 0 ? stderr : stdout).Trim();
+            if (fehler.Length > 400) fehler = fehler[^400..];
+            throw new InvalidOperationException($"Codex-Aufruf fehlgeschlagen:\n{fehler}");
+        }
+
+        // Session-Ordner aus dem Kopf der exec-Ausgabe ("session id: <uuid>")
+        var session = System.Text.RegularExpressions.Regex
+            .Match(stdout, @"session id: ([0-9a-f\-]{16,})");
+        var quelle = session.Success
+            ? Path.Combine(CodexBilderOrdner, session.Groups[1].Value)
+            : null;
+        var bilder = quelle is not null && Directory.Exists(quelle)
+            ? Directory.EnumerateFiles(quelle)
+                .Where(f => f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f)
+                .ToList()
+            : new List<string>();
+
+        if (bilder.Count == 0)
+        {
+            var antwort = stdout.Trim();
+            if (antwort.Length > 400) antwort = antwort[^400..];
+            throw new InvalidOperationException(
+                $"Codex hat kein Bild erzeugt.\n\nAntwort:\n{antwort}");
+        }
+
+        // In den Austauschordner kopieren (sprechende Namen statt ig_<hash>.png)
+        var ziele = new List<string>();
+        int n = 1;
+        foreach (var bild in bilder)
+        {
+            var ziel = Path.Combine(ausgabeOrdner,
+                $"bild-{DateTime.Now:HHmmss}-{n++}{Path.GetExtension(bild)}");
+            File.Copy(bild, ziel, overwrite: true);
+            ziele.Add(ziel);
+        }
+        return ziele;
+    }
+
     /// <summary>Argument für die Windows-Kommandozeile quoten (Backslash-Escaping für ").</summary>
     static string PsQuote(string s) =>
         "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";

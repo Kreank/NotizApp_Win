@@ -81,6 +81,10 @@
                         Margin="6,0,0,0" Padding="10,4" VerticalAlignment="Bottom"
                         ToolTip="Senden (Enter). Neue Zeile: Umschalt+Enter"
                         Click="Senden_Click"/>
+                <Button x:Name="BildButton" DockPanel.Dock="Right" Content="🎨"
+                        Margin="6,0,0,0" Padding="8,4" VerticalAlignment="Bottom"
+                        ToolTip="Bild generieren (läuft über die Codex-App): Bildbeschreibung ins Eingabefeld tippen, dann hier klicken"
+                        Click="BildGenerieren_Click"/>
                 <TextBox x:Name="EingabeBox" AcceptsReturn="True" TextWrapping="Wrap"
                          MaxHeight="120" VerticalScrollBarVisibility="Auto"
                          FontSize="13" Padding="4"
