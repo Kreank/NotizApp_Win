@@ -1297,7 +1297,7 @@ public partial class NoteEditor : UserControl
             try { System.IO.File.Delete(temp); } catch { }
 
             var ok = await StarteEdgeHeadlessAsync(edge,
-                $"--headless --disable-gpu --screenshot=\"{temp}\" --window-size=1280,2400 --hide-scrollbars \"{url}\"",
+                $"--headless=new --disable-gpu --screenshot=\"{temp}\" --window-size=1280,2400 --hide-scrollbars \"{url}\"",
                 TimeSpan.FromSeconds(45));
             if (!ok || _note is null || !_elemente.Contains(vm) ||
                 !System.IO.File.Exists(temp) || new System.IO.FileInfo(temp).Length == 0)
@@ -1412,7 +1412,7 @@ public partial class NoteEditor : UserControl
             try { System.IO.File.Delete(temp); } catch { }
 
             await StarteEdgeHeadlessAsync(edge,
-                $"--headless --disable-gpu --print-to-pdf=\"{temp}\" --print-to-pdf-no-header \"{url}\"",
+                $"--headless=new --disable-gpu --print-to-pdf=\"{temp}\" --print-to-pdf-no-header \"{url}\"",
                 TimeSpan.FromSeconds(60));
 
             if (_note is not null && System.IO.File.Exists(temp) &&
