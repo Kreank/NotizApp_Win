@@ -114,14 +114,19 @@
                          KeyDown="NotizListe_KeyDown">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="2,6">
-                                <TextBlock Text="{Binding AnzeigeTitel}" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding Vorschau}" Opacity="0.75" FontSize="12"
-                                           TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
-                                <TextBlock Text="{Binding AnzeigeUntertitel}" Opacity="0.55" FontSize="11"
-                                           TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
-                            </StackPanel>
+                            <DockPanel Margin="2,6">
+                                <Border DockPanel.Dock="Left" Width="3" CornerRadius="1.5"
+                                        Margin="0,1,8,1"
+                                        Background="{Binding NotizbuchFarbBrush}"/>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding AnzeigeTitel}" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Vorschau}" Opacity="0.75" FontSize="12"
+                                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                    <TextBlock Text="{Binding AnzeigeUntertitel}" Opacity="0.55" FontSize="11"
+                                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </DockPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                     <ListBox.ContextMenu>
@@ -199,6 +204,33 @@
                        Text="Keine Notiz ausgewählt.&#10;&#10;＋ Neue Notiz (Strg+N) oder links eine Notiz wählen."
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextAlignment="Center" Opacity="0.5"/>
+
+            <!-- Schwebende Chat-Bubble: immer erreichbar, auch ohne offene Notiz -->
+            <Button x:Name="ChatBubble" Width="46" Height="46"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,24,20" Cursor="Hand"
+                    ToolTip="KI-Chat öffnen/schließen"
+                    Click="ChatBubble_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="Kreis"
+                                     Fill="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}">
+                                <Ellipse.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.35"/>
+                                </Ellipse.Effect>
+                            </Ellipse>
+                            <TextBlock Text="💬" FontSize="19"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Kreis" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
         </Grid>
 
         <GridSplitter x:Name="SplitterChat" Grid.Column="5" Width="4" HorizontalAlignment="Center"

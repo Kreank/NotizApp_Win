@@ -73,6 +73,7 @@ public partial class MainWindow : Window
         BaueNeueNotizMenu();
         NotizListe.ContextMenuOpening += NotizListe_ContextMenuOpening;
 
+        NotizbuchFarben.Setze(settings.Aktuell.NotizbuchFarben);
         AktualisiereSidebar();
         AktualisiereListe();
         Editor.LadeNote(null);
@@ -91,15 +92,16 @@ public partial class MainWindow : Window
             foreach (var nb in _store.Notizbuecher())
             {
                 var anzahl = _store.Notizen.Count(n => n.Notizbuch == nb);
-                var item = new ListBoxItem { Content = $"📁 {nb}  ({anzahl})", Tag = nb };
+                var item = new ListBoxItem { Content = NotizbuchEintrag(nb, anzahl), Tag = nb };
 
                 var menu = new ContextMenu();
                 var umbenennen = new MenuItem { Header = "Umbenennen…" };
                 umbenennen.Click += (_, _) => UmbenenneNotizbuch(nb);
+                menu.Items.Add(umbenennen);
+                menu.Items.Add(BaueFarbMenu(nb));
+                menu.Items.Add(new Separator());
                 var loeschen = new MenuItem { Header = "Löschen" };
                 loeschen.Click += (_, _) => LoescheNotizbuch(nb);
-                menu.Items.Add(umbenennen);
-                menu.Items.Add(new Separator());
                 menu.Items.Add(loeschen);
                 item.ContextMenu = menu;
 
@@ -172,6 +174,76 @@ public partial class MainWindow : Window
         AktualisiereListe();
     }
 
+    /// <summary>Sidebar-Eintrag: farbiger Punkt (wenn Farbe gesetzt) oder 📁 + Name + Anzahl.</summary>
+    static StackPanel NotizbuchEintrag(string nb, int anzahl)
+    {
+        var stack = new StackPanel { Orientation = Orientation.Horizontal };
+        if (NotizbuchFarben.BrushFuer(nb) is { } brush)
+        {
+            stack.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 10,
+                Height = 10,
+                Margin = new Thickness(2, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Fill = brush,
+            });
+        }
+        else
+        {
+            stack.Children.Add(new TextBlock { Text = "📁", Margin = new Thickness(0, 0, 6, 0) });
+        }
+        stack.Children.Add(new TextBlock { Text = $"{nb}  ({anzahl})" });
+        return stack;
+    }
+
+    static readonly (string Name, string Hex)[] FarbPalette =
+    {
+        ("Blau", "#3B78D8"), ("Rot", "#D83B3B"), ("Grün", "#3B9E5F"),
+        ("Orange", "#E8871E"), ("Gelb", "#E3C71B"), ("Violett", "#8E5BD8"),
+        ("Türkis", "#2BAAB4"), ("Pink", "#D85BA6"), ("Braun", "#8B5A3C"),
+        ("Grau", "#8A8A8A"),
+    };
+
+    MenuItem BaueFarbMenu(string nb)
+    {
+        var farbMenu = new MenuItem { Header = "Farbe" };
+        foreach (var (name, hex) in FarbPalette)
+        {
+            var eintrag = new MenuItem
+            {
+                Header = name,
+                Icon = new System.Windows.Shapes.Ellipse
+                {
+                    Width = 12,
+                    Height = 12,
+                    Fill = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)),
+                },
+                IsChecked = NotizbuchFarben.Hex(nb) == hex,
+            };
+            eintrag.Click += (_, _) => SetzeNotizbuchFarbe(nb, hex);
+            farbMenu.Items.Add(eintrag);
+        }
+        farbMenu.Items.Add(new Separator());
+        var keine = new MenuItem { Header = "Keine Farbe" };
+        keine.Click += (_, _) => SetzeNotizbuchFarbe(nb, null);
+        farbMenu.Items.Add(keine);
+        return farbMenu;
+    }
+
+    void SetzeNotizbuchFarbe(string nb, string? hex)
+    {
+        if (hex is null)
+            _settings.Aktuell.NotizbuchFarben.Remove(nb);
+        else
+            _settings.Aktuell.NotizbuchFarben[nb] = hex;
+        _settings.Speichere();
+        NotizbuchFarben.Setze(_settings.Aktuell.NotizbuchFarben);
+        AktualisiereSidebar();
+        AktualisiereListe(); // Farbbalken der Notizliste
+    }
+
     void NeuesNotizbuch_Click(object sender, RoutedEventArgs e)
     {
         var name = TextPromptWindow.Frage(this, "Neues Notizbuch", "Name des Notizbuchs:");
@@ -196,10 +268,13 @@ public partial class MainWindow : Window
         }
         if (_filterNotizbuch == nb) _filterNotizbuch = ergebnis;
         if (_settings.Aktuell.QuickNotebook == nb)
-        {
             _settings.Aktuell.QuickNotebook = ergebnis;
-            _settings.Speichere();
+        if (_settings.Aktuell.NotizbuchFarben.Remove(nb, out var farbe))
+        {
+            _settings.Aktuell.NotizbuchFarben[ergebnis] = farbe;
+            NotizbuchFarben.Setze(_settings.Aktuell.NotizbuchFarben);
         }
+        _settings.Speichere();
         AktualisiereSidebar();
         AktualisiereListe();
     }
@@ -223,6 +298,11 @@ public partial class MainWindow : Window
         }
         _store.NotizbuchLoeschen(nb);
         if (_filterNotizbuch == nb) _filterNotizbuch = null;
+        if (_settings.Aktuell.NotizbuchFarben.Remove(nb))
+        {
+            _settings.Speichere();
+            NotizbuchFarben.Setze(_settings.Aktuell.NotizbuchFarben);
+        }
         AktualisiereSidebar();
         AktualisiereListe();
     }
@@ -552,6 +632,8 @@ public partial class MainWindow : Window
         _settings.Aktuell.ChatOffen = an;
         _settings.Speichere();
     }
+
+    void ChatBubble_Click(object sender, RoutedEventArgs e) => SetzeChatSichtbar(!_chatOffen);
 
     void ChatTextEinfuegen(string text)
     {

@@ -157,12 +157,17 @@ public class Note : INotifyPropertyChanged
         }
     }
 
+    /// <summary>Farbbalken der Notizliste (Farbe des Notizbuchs, null = keiner).</summary>
+    public System.Windows.Media.Brush? NotizbuchFarbBrush =>
+        Services.NotizbuchFarben.BrushFuer(Notizbuch);
+
     /// <summary>Nach Änderungen aufrufen, damit die Listen-Anzeige aktualisiert wird.</summary>
     public void MeldeAnzeigeGeaendert()
     {
         OnChanged(nameof(AnzeigeTitel));
         OnChanged(nameof(AnzeigeUntertitel));
         OnChanged(nameof(Vorschau));
+        OnChanged(nameof(NotizbuchFarbBrush));
     }
 
     /// <summary>Baut den Volltext-Cache für die Suche neu auf.</summary>
