@@ -14,6 +14,8 @@
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <AssemblyTitle>NotizApp</AssemblyTitle>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- App-Icon (Explorer, Taskleiste, Alt+Tab; Tray zieht es aus der EXE) -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
