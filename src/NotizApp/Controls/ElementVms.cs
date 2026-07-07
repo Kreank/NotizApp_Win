@@ -109,6 +109,25 @@ public class TextElementVm : ElementVm
         }
     }
 
+    string? _schrift;
+    /// <summary>Schriftart-Name, null = Standardschrift des Designs.</summary>
+    public string? Schrift
+    {
+        get => _schrift;
+        set
+        {
+            if (_schrift == value) return;
+            _schrift = value;
+            OnChanged();
+            OnChanged(nameof(SchriftFamily));
+            MeldeGeaendert();
+        }
+    }
+
+    /// <summary>FontFamily für die TextBox; ohne gesetzte Schrift die Windows-Standardschrift.</summary>
+    public FontFamily SchriftFamily =>
+        string.IsNullOrWhiteSpace(_schrift) ? new FontFamily("Segoe UI") : new FontFamily(_schrift);
+
     /// <summary>Tatsächlich gerenderte Höhe (setzt der Editor nach dem Layout) — nur fürs Mitwachsen.</summary>
     public double AnzeigeHoehe { get; set; } = 28;
 
@@ -120,11 +139,12 @@ public class TextElementVm : ElementVm
         X = el.X; Y = el.Y; Breite = el.Breite;
         _text = el.Text;
         _farbe = el.Farbe;
+        _schrift = el.Schrift;
     }
 
     public override NoteElement ZuModel()
     {
-        var el = new TextElement { Text = Text, Farbe = Farbe };
+        var el = new TextElement { Text = Text, Farbe = Farbe, Schrift = Schrift };
         UebernehmePosition(el);
         return el;
     }

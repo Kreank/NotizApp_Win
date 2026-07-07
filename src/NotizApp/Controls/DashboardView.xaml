@@ -80,12 +80,13 @@
 
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="320"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition x:Name="KalenderSpalte" Width="320" MinWidth="240"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*" MinWidth="300"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- ===== Links: Monatskalender + Terminliste ===== -->
-                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                <StackPanel Grid.Column="0" Margin="0,0,4,0">
                     <Border CornerRadius="12" Padding="14" BorderThickness="1"
                             Background="{DynamicResource AppFlaecheBrush}"
                             BorderBrush="{DynamicResource AppRandBrush}">
@@ -165,8 +166,35 @@
                     </ItemsControl>
                 </StackPanel>
 
+                <!-- Ziehbare Trennlinie: Breite von Kalender ↔ Neuigkeiten anpassen -->
+                <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch" Background="Transparent"
+                              ToolTip="Ziehen: Breite von Kalender und Neuigkeiten anpassen">
+                    <GridSplitter.Template>
+                        <ControlTemplate TargetType="GridSplitter">
+                            <Border Background="Transparent">
+                                <Rectangle x:Name="Linie" Width="2" Margin="0,24"
+                                           HorizontalAlignment="Center" RadiusX="1" RadiusY="1"
+                                           Fill="{DynamicResource AppRandBrush}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Linie" Property="Width" Value="3"/>
+                                    <Setter TargetName="Linie" Property="Fill"
+                                            Value="{DynamicResource AppAkzentBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsDragging" Value="True">
+                                    <Setter TargetName="Linie" Property="Width" Value="3"/>
+                                    <Setter TargetName="Linie" Property="Fill"
+                                            Value="{DynamicResource AppAkzentBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </GridSplitter.Template>
+                </GridSplitter>
+
                 <!-- ===== Rechts: Neuigkeiten-Feed ===== -->
-                <StackPanel Grid.Column="1">
+                <StackPanel Grid.Column="2">
                     <TextBlock Text="Neuigkeiten für dich" FontSize="15" FontWeight="SemiBold"
                                Margin="2,0,0,10"/>
                     <!-- Kategorie-Filter (Pillen), gefüllt im Code-Behind aus dem geladenen Feed -->

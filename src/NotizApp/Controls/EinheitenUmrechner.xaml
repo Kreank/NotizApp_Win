@@ -21,7 +21,7 @@
                   HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
         <StackPanel Margin="24" MaxWidth="540" HorizontalAlignment="Left">
 
-            <TextBlock Text="🔁 Einheiten-Umrechner" FontSize="22" FontWeight="SemiBold"
+            <TextBlock Text="🔄 Einheiten-Umrechner" FontSize="22" FontWeight="SemiBold"
                        Foreground="{DynamicResource AppTextBrush}"/>
             <TextBlock Text="Leistung, Druck, Temperatur, Volumenstrom, Energie"
                        FontSize="13" Margin="0,2,0,20"

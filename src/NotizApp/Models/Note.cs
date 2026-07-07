@@ -47,6 +47,8 @@ public class TextElement : NoteElement
     public string Text { get; set; } = "";
     /// <summary>Hex-Farbe "#RRGGBB", null = Standardfarbe des Designs (hell/dunkel).</summary>
     public string? Farbe { get; set; }
+    /// <summary>Schriftart-Name (z.B. "Consolas"), null = Standardschrift.</summary>
+    public string? Schrift { get; set; }
 }
 
 /// <summary>Bild auf der Fläche (Dateiname neben der .md) — Tinte kann darüber liegen.</summary>

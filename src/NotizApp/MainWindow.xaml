@@ -117,9 +117,9 @@
                          SelectionChanged="WerkzeugListe_SelectionChanged">
                     <ListBoxItem Content="🔥 Heizlast (überschlägig)"/>
                     <ListBoxItem Content="💧 Volumenstrom"/>
-                    <ListBoxItem Content="🪣 Wasserinhalt"/>
-                    <ListBoxItem Content="🫙 Ausdehnungsgefäß"/>
-                    <ListBoxItem Content="🔁 Einheiten-Umrechner"/>
+                    <ListBoxItem Content="🌊 Wasserinhalt"/>
+                    <ListBoxItem Content="🎈 Ausdehnungsgefäß"/>
+                    <ListBoxItem Content="🔄 Einheiten-Umrechner"/>
                 </ListBox>
             </StackPanel>
 

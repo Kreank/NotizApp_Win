@@ -27,7 +27,7 @@
                   HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
         <StackPanel Margin="24" MaxWidth="560" HorizontalAlignment="Left">
 
-            <TextBlock Text="🪣 Wasserinhalt / Befüllmenge" FontSize="22" FontWeight="SemiBold"
+            <TextBlock Text="🌊 Wasserinhalt / Befüllmenge" FontSize="22" FontWeight="SemiBold"
                        Foreground="{DynamicResource AppTextBrush}"/>
             <TextBlock Text="Anlagenwasserinhalt als Summe der Komponenten (VDI 2035)"
                        FontSize="13" Margin="0,2,0,20"

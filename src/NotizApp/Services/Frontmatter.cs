@@ -209,6 +209,7 @@ public static partial class Frontmatter
                     "text" => new TextElement
                     {
                         Farbe = attrs.TryGetValue("farbe", out var f) && f.Length > 0 ? f : null,
+                        Schrift = attrs.TryGetValue("schrift", out var s) && s.Length > 0 ? s : null,
                     },
                     "bild" => new BildElement
                     {
@@ -505,6 +506,8 @@ public static partial class Frontmatter
                     sb.Append($"<!--el text {pos}");
                     if (!string.IsNullOrWhiteSpace(t.Farbe))
                         sb.Append($" farbe={t.Farbe}");
+                    if (!string.IsNullOrWhiteSpace(t.Schrift))
+                        sb.Append($" schrift=\"{t.Schrift}\"");
                     sb.Append("-->\n");
                     sb.Append(t.Text.Replace("\r\n", "\n").TrimEnd('\n'));
                     sb.Append("\n\n");

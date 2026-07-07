@@ -111,11 +111,21 @@ public partial class MainWindow : Window
         {
             var nbAuswahl = _filterNotizbuch;
             NotizbuchListe.Items.Clear();
-            foreach (var nb in _store.Notizbuecher())
+            var alleNb = _store.Notizbuecher().ToList();
+            foreach (var nb in alleNb)
             {
+                // Kinder eines eingeklappten Ordners nicht anzeigen
+                if (IstUnterEingeklapptem(nb)) continue;
+
                 // Anzahl inkl. Unterordner — der Klick auf den Ordner zeigt ja auch den Teilbaum
                 var anzahl = _store.Notizen.Count(n => NoteStore.ImTeilbaum(n.Notizbuch, nb));
-                var item = new ListBoxItem { Content = NotizbuchEintrag(nb, anzahl), Tag = nb };
+                var hatKinder = alleNb.Any(x => x.StartsWith(nb + "/", StringComparison.Ordinal));
+                var eingeklappt = _eingeklappteOrdner.Contains(nb);
+                var item = new ListBoxItem
+                {
+                    Content = NotizbuchEintrag(nb, anzahl, hatKinder, eingeklappt),
+                    Tag = nb,
+                };
 
                 var menu = new ContextMenu();
                 var unterordner = new MenuItem { Header = "Unterordner anlegen…" };
@@ -259,10 +269,33 @@ public partial class MainWindow : Window
         System.Windows.Media.Geometry.Parse(
             "M0,2 A2,2 0 0 1 2,0 L5,0 L7,2 L13,2 A2,2 0 0 1 15,4 L15,10 A2,2 0 0 1 13,12 L2,12 A2,2 0 0 1 0,10 Z");
 
-    /// <summary>Sidebar-Eintrag: Ordnersymbol (in der Notizbuch-Farbe, falls gesetzt)
-    /// + Name + Anzahl. Unterordner ("Kunden/Meier") werden eingerückt und
-    /// zeigen nur ihren letzten Namensteil.</summary>
-    static StackPanel NotizbuchEintrag(string nb, int anzahl)
+    /// <summary>Eingeklappte Notizbuch-Ordner (voller Pfad). Nur zur Laufzeit —
+    /// beim Neustart sind alle Ordner wieder aufgeklappt.</summary>
+    readonly HashSet<string> _eingeklappteOrdner = new();
+
+    /// <summary>Ein-/Ausklappen eines Ordners umschalten und Sidebar neu aufbauen.</summary>
+    void ToggleEinklappen(string nb)
+    {
+        if (!_eingeklappteOrdner.Remove(nb)) _eingeklappteOrdner.Add(nb);
+        AktualisiereSidebar();
+    }
+
+    /// <summary>Liegt <paramref name="nb"/> unter einem eingeklappten Ordner?</summary>
+    bool IstUnterEingeklapptem(string nb)
+    {
+        int idx = 0;
+        while ((idx = nb.IndexOf('/', idx)) >= 0)
+        {
+            if (_eingeklappteOrdner.Contains(nb[..idx])) return true;
+            idx++;
+        }
+        return false;
+    }
+
+    /// <summary>Sidebar-Eintrag: optionaler Klapp-Pfeil (bei Unterordnern) +
+    /// Ordnersymbol (in der Notizbuch-Farbe, falls gesetzt) + Name + Anzahl.
+    /// Unterordner ("Kunden/Meier") werden eingerückt und zeigen nur den letzten Namensteil.</summary>
+    StackPanel NotizbuchEintrag(string nb, int anzahl, bool hatKinder, bool eingeklappt)
     {
         int tiefe = nb.Count(c => c == '/');
         var anzeigeName = nb[(nb.LastIndexOf('/') + 1)..];
@@ -272,6 +305,37 @@ public partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(tiefe * 16, 0, 0, 0),
         };
+
+        // Klapp-Pfeil nur bei vorhandenen Unterordnern; sonst Platzhalter für die Ausrichtung.
+        if (hatKinder)
+        {
+            var pfeil = new Button
+            {
+                Content = eingeklappt ? "▸" : "▾",
+                Width = 16,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 2, 0),
+                FontSize = 10,
+                Background = System.Windows.Media.Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Foreground = (System.Windows.Media.Brush)FindResource("AppTextBrush"),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = eingeklappt ? "Unterordner anzeigen" : "Unterordner einklappen",
+            };
+            // Klick auf den Pfeil klappt nur um — er darf die Ordner-Auswahl nicht auslösen
+            pfeil.Click += (_, e) => { e.Handled = true; ToggleEinklappen(nb); };
+            stack.Children.Add(pfeil);
+        }
+        else
+        {
+            stack.Children.Add(new System.Windows.Controls.Border
+            {
+                Width = 16,
+                Background = System.Windows.Media.Brushes.Transparent,
+            });
+        }
+
         if (NotizbuchFarben.BrushFuer(nb) is { } brush)
         {
             stack.Children.Add(new System.Windows.Shapes.Path
@@ -286,7 +350,11 @@ public partial class MainWindow : Window
         {
             stack.Children.Add(new TextBlock { Text = "📁", Margin = new Thickness(0, 0, 6, 0) });
         }
-        stack.Children.Add(new TextBlock { Text = $"{anzeigeName}  ({anzahl})" });
+        stack.Children.Add(new TextBlock
+        {
+            Text = $"{anzeigeName}  ({anzahl})",
+            VerticalAlignment = VerticalAlignment.Center,
+        });
         return stack;
     }
 

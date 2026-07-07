@@ -12,20 +12,89 @@
             <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
             <Setter Property="CaretBrush" Value="{DynamicResource AppTextBrush}"/>
         </Style>
+        <!-- Flache, moderne Werkzeug-Schaltflächen: transparent, abgerundet,
+             dezenter Hover; aktives Werkzeug (Toggle) in Akzentfarbe.
+             Ersetzt die graue WPF-Standard-Optik. -->
         <Style x:Key="WerkzeugToggle" TargetType="ToggleButton">
-            <Setter Property="Margin" Value="2,0"/>
-            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Padding" Value="8,5"/>
             <Setter Property="MinWidth" Value="34"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="B" CornerRadius="6" SnapsToDevicePixels="True"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource AppFlaecheBrush}"/>
+                                <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource AppAkzentLeiseBrush}"/>
+                                <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource AppAkzentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="WerkzeugButton" TargetType="Button">
-            <Setter Property="Margin" Value="2,0"/>
-            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Padding" Value="9,5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="B" CornerRadius="6" SnapsToDevicePixels="True"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource AppFlaecheBrush}"/>
+                                <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource AppAkzentLeiseBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Textfeld eines Text-Elements: Farbe aus dem VM, sonst Design-Farbe -->
         <Style x:Key="ElementTextBox" TargetType="TextBox" BasedOn="{StaticResource RahmenlosTextBox}">
             <Setter Property="Foreground" Value="{Binding FarbBrush}"/>
             <Setter Property="CaretBrush" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="FontFamily" Value="{Binding SchriftFamily}"/>
+            <!-- merkt sich das gerade bearbeitete Textfeld für Farb-/Schriftwahl -->
+            <EventSetter Event="GotKeyboardFocus" Handler="TextFeld_Fokus"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding FarbBrush}" Value="{x:Null}">
                     <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
@@ -637,6 +706,12 @@
                         <Ellipse Width="14" Height="14" Fill="#8B5A3C"/>
                     </Button>
                 </WrapPanel>
+
+                <ComboBox x:Name="SchriftBox" Width="128" Margin="4,0" FontSize="12"
+                          VerticalAlignment="Center" MaxDropDownHeight="360"
+                          Foreground="{DynamicResource AppTextBrush}"
+                          ToolTip="Schriftart des aktiven Textfeldes — erst ins Textfeld klicken, dann Schrift wählen"
+                          SelectionChanged="Schrift_Changed"/>
 
                 <Separator Margin="6,2" Width="1"/>
 

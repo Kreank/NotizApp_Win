@@ -61,12 +61,18 @@ public partial class NoteEditor : UserControl
     bool _stiftGesehen; // je ein Stylus-Kontakt genügt
     bool _stiftNah;     // Stift schwebt über der Fläche / berührt sie
 
+    // Zuletzt bearbeitetes Textfeld — Ziel für Farb-/Schriftwahl aus der Werkzeugleiste
+    TextElementVm? _aktivesTextfeld;
+    bool _schriftSync; // Guard: SchriftBox wird programmatisch gesetzt
+    const string SchriftStandard = "(Standard)";
+
     public NoteEditor()
     {
         InitializeComponent();
         _initialisiert = true;
 
         AktualisiereTypBox();
+        BefuelleSchriften();
 
         _erkennungTimer = new DispatcherTimer
         {
@@ -266,6 +272,7 @@ public partial class NoteEditor : UserControl
         _elemente.Remove(vm);
         if (_hosts.Remove(vm, out var host))
             Flaeche.Children.Remove(host);
+        if (ReferenceEquals(vm, _aktivesTextfeld)) VergissTextfeld();
     }
 
     static T? FindeKind<T>(DependencyObject wurzel) where T : DependencyObject
@@ -787,16 +794,71 @@ public partial class NoteEditor : UserControl
             if (t != sender) t.IsChecked = false;
         }
         if (!Equals(sender, FormToggle)) BrecheFormAb();
+        // Zeichenwerkzeug gewählt → Farbe/Schrift gelten wieder dem Stift, nicht mehr dem Textfeld
+        if (!Equals(sender, AuswahlToggle)) VergissTextfeld();
         WendeWerkzeugAn();
     }
 
     void Farbe_Click(object sender, RoutedEventArgs e)
     {
-        _farbe = (string)((Button)sender).Tag;
+        var hex = (string)((Button)sender).Tag;
+        // Im Auswahl-/Tippmodus mit aktivem Textfeld: Farbe färbt das Textfeld statt den Stift
+        if (AuswahlToggle.IsChecked == true && _aktivesTextfeld is { } tf)
+        {
+            tf.Farbe = hex == "auto" ? null : hex;
+            return;
+        }
+        _farbe = hex;
         // Farbwahl aktiviert den Stift — außer der Marker ist gerade aktiv (der färbt mit)
         if (MarkerToggle.IsChecked != true)
             StiftToggle.IsChecked = true;
         WendeWerkzeugAn();
+    }
+
+    // ---------- Text-Formatierung (Farbe/Schrift pro Textfeld) ----------
+
+    void BefuelleSchriften()
+    {
+        _schriftSync = true;
+        SchriftBox.Items.Add(SchriftStandard);
+        foreach (var name in System.Windows.Media.Fonts.SystemFontFamilies
+                     .Select(f => f.Source)
+                     .Distinct()
+                     .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase))
+            SchriftBox.Items.Add(name);
+        SchriftBox.SelectedItem = SchriftStandard;
+        _schriftSync = false;
+    }
+
+    /// <summary>Ein Textfeld hat Fokus bekommen: merken und die Schrift-Auswahl darauf einstellen.</summary>
+    void TextFeld_Fokus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: TextElementVm vm }) return;
+        _aktivesTextfeld = vm;
+        _schriftSync = true;
+        // Schrift des Feldes zeigen; ist sie nicht (mehr) installiert → "(Standard)"
+        SchriftBox.SelectedItem =
+            !string.IsNullOrWhiteSpace(vm.Schrift) && SchriftBox.Items.Contains(vm.Schrift)
+                ? vm.Schrift : SchriftStandard;
+        _schriftSync = false;
+    }
+
+    /// <summary>Schrift-Auswahl geändert → auf das aktive Textfeld anwenden.</summary>
+    void Schrift_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_schriftSync || _aktivesTextfeld is null) return;
+        var wahl = SchriftBox.SelectedItem as string;
+        _aktivesTextfeld.Schrift =
+            wahl == SchriftStandard || string.IsNullOrEmpty(wahl) ? null : wahl;
+    }
+
+    /// <summary>Kein Textfeld mehr im Fokus für Farbe/Schrift (z.B. Zeichenwerkzeug gewählt).</summary>
+    void VergissTextfeld()
+    {
+        _aktivesTextfeld = null;
+        _schriftSync = true;
+        if (SchriftBox is not null) SchriftBox.SelectedItem = SchriftStandard;
+        _schriftSync = false;
     }
 
     Color AktuelleFarbe() => _farbe == "auto"
