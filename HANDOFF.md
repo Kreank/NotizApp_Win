@@ -1,107 +1,135 @@
-# HANDOFF — Stand 06.07.2026
+# HANDOFF — Stand 07.07.2026
 
-## Auftrag
+## Kontext
 
-Der Nutzer hat die V1 der NotizApp freigegeben: **"zieh mal durch"** — die komplette V1
-laut `KONZEPT.md` autonom implementieren. Anforderungen sind final abgestimmt, nichts
-mehr nachfragen, einfach bauen. Danach Build + Startlauf verifizieren und Ergebnis melden.
+NotizApp: native Win11-Notiz-App (WPF/.NET 9, Fluent `ThemeMode="System"`) für einen
+SHK-Betrieb. Ein einziger Nutzer (der Inhaber), Sprache Deutsch, keine Mehrbenutzer-Themen.
+`KONZEPT.md` ist die abgestimmte Quelle — Änderungen daran nur mit dem Nutzer absprechen
+und das Dokument mitpflegen. V1, V2 (KI) und der große Freiform-Umbau sind **fertig und
+committet**; die App ist in täglicher Benutzung durch den Nutzer.
 
-## Aktueller Stand (aktualisiert 06.07.2026)
+Arbeitsweise mit dem Nutzer: Features direkt umsetzen ("zieh durch"-Mentalität), auf
+Deutsch antworten, jede abgeschlossene Einheit committen (deutsche Commit-Messages,
+ASCII-Umlaute, Claude-Trailer), App nach jedem Build neu starten, damit er sofort testet.
 
-- ✅ **V1 komplett implementiert und verifiziert** (Build 0 Warnungen / 0 Fehler)
-- ✅ Getestet per Startlauf mit `NOTIZAPP_APPDATA`-Testordner + Screenshots:
-  Hauptfenster (Dark Mode), Notiz öffnen/bearbeiten, Aufgaben-Ansicht inkl. Abhaken
-  (schreibt `[x]` in die Datei), Schnellnotiz per Strg+Alt+N im Tray-Modus
-  (Titel-Ableitung aus Kundenname, Datei in `Kunden-Anrufe`), Single-Instance
-  (Zweitstart zeigt Hauptfenster), Tintenfläche zeichnen → ISF-Sidecar + ink-Fence
-  → Roundtrip beim Notizwechsel, Volltextsuche
-- ⚠️ Nicht real getestet (braucht echten Stift): Erkennungsqualität der Handschrift;
-  Autostart-Registry-Eintrag (Code trivial, bewusst nicht im Test gesetzt)
-- ✅ V1 committet (`1f9d972`)
-- ✅ Docker Desktop 29.6.1 + WSL2 laufen
-- ✅ **V2 (KI) implementiert:** `docker/claude/Dockerfile` + `docker/einrichten.ps1`,
-  `Services/KiService.cs` (docker run, Body via stdin, 3-Min-Timeout),
-  `KiVorschlagWindow` (Vorschlag editierbar, Übernehmen/Abbrechen),
-  ✨-Button im Editor (Zusammenfassen / Aufbereiten / Aufgaben extrahieren).
-  Übernahme: Zusammenfassung → Block oben; Aufbereiten → ersetzt Text (bzw. hängt
-  an, wenn Tinte in der Notiz); Aufgaben → Block unten. Container-Aufruf ohne
-  Login getestet (saubere Fehlermeldung mit Hinweis auf einrichten.ps1)
-- ⏳ **Nutzer muss einmalig `.\docker\einrichten.ps1` ausführen** (Claude-Login
-  im Container, landet im Volume `notizapp-claude-config`) — danach erster
-  echter End-to-End-Test der ✨-Funktionen
-- ⚠️ UI-Klicktest der V2-Oberfläche abgebrochen (Nutzer arbeitete aktiv am PC,
-  Maus-Simulation hätte gestört) — Code baut, Muster identisch zu V1
+## Aktueller Stand (was alles existiert)
 
-## Wichtige Umgebungs-Hinweise
+- ✅ **Freiform-Canvas-Editor** (Commit `b7482fb`, revidiert das alte Blockmodell):
+  Eine Notiz = EINE große `InkCanvas`-Fläche. Textfelder per Doppelklick frei platzierbar,
+  Bilder/Dateien (png/jpg/pdf/xlsx/docx/md/txt) als verschieb-/skalierbare Objekte
+  (+ Datei-Button, Drag&Drop), Tinte überall — auch über Objekten. PDFs mit
+  Erste-Seite-Vorschau (`Windows.Data.Pdf`), Doppelklick öffnet Dateien. Fläche wächst
+  automatisch. Papier-Muster (Blanko/Liniert/Kariert/Punkte) pro Notiz.
+- ✅ **Handschrift → Text mit Farbvererbung:** Umwandlung erzeugt ein Textfeld an der
+  Schreibstelle in der dominanten Stiftfarbe (Design-Automatikfarbe → null = Themefarbe).
+  Anschluss-Heuristik hängt fortlaufendes Schreiben ans vorige Feld an. Lasso-Auswahl +
+  „⬚→A"-Button wandelt gezielt um. Marker-Striche werden nie umgewandelt.
+  Hintergrunderkennung (für Suche/KI) läuft immer.
+- ✅ **KI-Chat** (Commit `b0a6b2b`): Panel rechts (💬-Bubble unten rechts / Button in der
+  Werkzeugleiste), `claude -p --resume` im Docker-Container, Verlauf über Nachrichten
+  hinweg. Checkbox „Aktuelle Notiz mitgeben" (nur Body!). Antworten per Knopf in die
+  Notiz; erzeugte Dateien als Anhänge (📌 in Notiz / 💾 speichern).
+- ✅ **Bildgenerierung 🎨** (Commit `b39d1ba`): läuft über die **lokale Codex-Desktop-App**
+  des Nutzers (`codex exec`, read-only, imagegen-Skill des Codex-Abos — KEIN Docker,
+  kein API-Key). App holt die PNGs aus `~/.codex/generated_images/<session-id>/`.
+  Arbeitsteilung: Codex generiert Bilder, alles andere Claude.
+- ✅ **Claude-Container kann zeichnen** (Commit `d4f45c7`): graphviz, matplotlib,
+  librsvg (SVG→PNG), openpyxl (echte .xlsx). E2E getestet.
+- ✅ **Farbsystem „Kupfer & Wasser"** (Commit `7aa027f`): `Services/Farbschema.cs` setzt
+  semantische Brushes (AppText, AppTextLeise, AppFlaeche, AppFlaecheTief, AppRand,
+  AppAkzent, AppAkzentLeise, AppKupfer, AppGlow*) beim Start + live bei Theme-Wechsel.
+  Grund: SystemColors-Keys wechseln unterm Fluent-Theme nicht zuverlässig (schwarz auf
+  schwarz). Signatur: zwei langsam treibende Licht-Schimmer im Hauptfenster-Hintergrund
+  (Code: `MainWindow.StarteGlowAnimation`, aus bei `!SystemParameters.ClientAreaAnimation`).
+- ✅ **UI-Verwaltung:** Seitenleisten einzeln einklappbar (Strg+B / Strg+Umschalt+B,
+  schmale Rails, Zustand in settings.json); Fokus-Modus F11; Notizbücher per Rechtsklick
+  umbenennen/löschen/färben (10 Farben, Punkt in Sidebar + Farbbalken in der Notizliste,
+  Mapping in settings.json); Entf löscht markierte Notiz; Chat-Panel-Zustand persistiert.
+- ⚠️ **Vom Nutzer noch nicht rückgemeldet:** Wie sich der neue Look in beiden Themes
+  anfühlt (Glow zu stark/schwach?) und ob noch konkrete unlesbare Stellen existieren.
 
-- `dotnet` ist evtl. nicht im PATH der Tool-Session → vor dotnet-Aufrufen:
-  `$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + $env:Path`
-  (nach dem Neustart vermutlich nicht mehr nötig, kurz testen)
-- Testbarkeit: Settings-Service soll env-Variable `NOTIZAPP_APPDATA` als Override für den
-  Settings-Ordner unterstützen → App lässt sich mit Scratchpad-Testdaten starten, ohne die
-  echten Nutzer-Settings anzulegen
-- App zum Verifizieren starten, Fenster-Screenshot machen (GetWindowRect + CopyFromScreen), prüfen, Prozess beenden
+## Dateiformat (seit Freiform-Umbau)
 
-## V1-Implementierungsplan (bereits durchdacht — so umsetzen)
+- `.md` mit YAML-Frontmatter-Subset (titel/typ/erstellt/geaendert/tags/kunde/dringlichkeit).
+- Body: ein ` ```tinte `-Fence (datei/hoehe/muster/text = erkannte Handschrift) + je Element
+  ein Marker `<!--el text|bild|datei x= y= b= [h=] [farbe=] [datei="…"]-->`; bei text folgt
+  der Inhalt bis zum nächsten Marker. Eine ISF pro Notiz: `<mdname>.tinte.isf`.
+- **Altformat-Migration:** ` ```ink `-Fences (eigene `.t<n>.isf` je Block) werden beim Parsen
+  gestapelt (`Note.AltTinten` mit Y-Versätzen); `NoteStore.LadeTinte` führt die Striche
+  zusammen, `Speichere`/`Verschiebe` erzwingen die Migration vorher. Alte `.t*.isf` werden
+  beim Speichern aufgeräumt (Pattern matcht auch `.tinte.isf` — `gueltig`-Check beachten!).
+- Anhänge: `<mdname>.<originalname>` neben der .md; `Loesche`/`Verschiebe` nehmen alle
+  Sidecars mit.
 
-### Architektur-Entscheidungen
+## Datenschutz-Regel (hart, mehrfach vom Nutzer bestätigt)
 
-- **Kein MVVM-Framework, keine NuGet-Pakete.** Pragmatisches Code-Behind + kleine INPC-ViewModels. Frontmatter-Parser selbst schreiben (kontrolliertes Subset, wir schreiben die Dateien ja selbst).
-- **Suche/Aufgaben-Index für V1 in-memory** (beim Start alle .md parsen — bei ein paar tausend Notizen unkritisch). SQLite erst später bei Bedarf. `KONZEPT.md` Abschnitt 1 entsprechend anpassen.
-- **Tray-Icon über WinForms `NotifyIcon`** → `<UseWindowsForms>true</UseWindowsForms>` ins csproj. Icon zur Laufzeit mit System.Drawing zeichnen (blauer Kreis + "N"). In TrayService nur Aliase (`WF = System.Windows.Forms`) verwenden, sonst Namenskonflikte.
-- **Handschrifterkennung:** WinRT `Windows.UI.Input.Inking` via CsWinRT (TFM ist schon richtig):
-  WPF-Strokes klonen → je Stroke `StylusPoints` → `InkPoint(new Windows.Foundation.Point(x,y), p.PressureFactor)` → `InkStrokeBuilder.CreateStrokeFromInkPoints(pts, Matrix3x2.Identity)` → `InkStrokeContainer` → `new InkRecognizerContainer().RecognizeAsync(container, InkRecognitionTarget.All)` → Kandidaten mit Leerzeichen joinen. Alles in try/catch — bei Fehler `null` (Feature degradiert sanft).
-- **Globaler Hotkey** Strg+Alt+N: `RegisterHotKey` (user32) auf message-only `HwndSource` (`HwndSourceParameters` mit `ParentWindow = new IntPtr(-3)`), WM_HOTKEY=0x0312, MOD_ALT=1|MOD_CONTROL=2|MOD_NOREPEAT=0x4000, VK 'N'=0x4E.
-- **Single Instance:** benannter Mutex `NotizApp_Instanz` + `EventWaitHandle` `NotizApp_Zeigen` (Zweitstart setzt Event → Erstinstanz zeigt Hauptfenster). `ShutdownMode.OnExplicitShutdown`; Hauptfenster-Close = Hide (Tray-App), Beenden nur über Tray-Menü.
-- **Autostart:** HKCU `...\CurrentVersion\Run`, Wert `"<Environment.ProcessPath>" --tray`; Arg `--tray` = Start ohne Fenster.
+An die KI geht **ausschließlich** der Body (Textelemente in Leserichtung + erkannter
+Handschrift-Text). Der komplette Frontmatter-Kopf **inklusive Titel** bleibt lokal
+(Titel enthält oft Kundennamen — war kurz geleakt, Fix `51170a8`). Der Claude-Container
+sieht den Notizen-Ordner nie (nur Login-Volume + leerer /ausgabe-Mount); Codex bekommt
+nur den Auftragstext.
 
-### Dateiformat
+## Architektur-Landkarte
 
-Notiz = `<Notizbuch-Ordner>/<yyyyMMdd-HHmmss>-<vorlage>.md` mit YAML-Frontmatter
-(Subset: `titel`, `typ`, `erstellt`, `geaendert`, `tags: [a, b]`, `kunde:` mit 2-Space-Einrückung
-`name/telefon/adresse`, `dringlichkeit`). Body = Markdown mit Tinten-Blöcken als Fence:
+- `Models/Note.cs` — Note + NoteElement (TextElement/BildElement/DateiElement), AltTinte,
+  Volltext/Vorschau/NotizbuchFarbBrush
+- `Services/Frontmatter.cs` — Parser/Writer beider Formate + Migration
+- `Services/NoteStore.cs` — Laden/Speichern/Verschieben/Löschen, Notizbuch-Verwaltung,
+  Tinten-Migration
+- `Services/KiService.cs` — Docker-Claude (FrageAsync/ErzeugeDokumentAsync/ChatAsync mit
+  --resume + JSON-Parsing) und lokale Codex-CLI (FindeCodex/GeneriereBilderAsync)
+- `Services/Farbschema.cs` — Farbsystem + IstDunkel(); `Services/NotizbuchFarben.cs` —
+  statisches Notizbuch→Farbe-Mapping
+- `Services/InkRecognitionService.cs` — WinRT-Handschrifterkennung (geometrie-basiert)
+- `Services/TaskService.cs` — Checkboxen aus TextElementen (ElementIndex/ZeilenIndex)
+- `Controls/NoteEditor.xaml(.cs)` — das Kernstück: Fläche, Werkzeuge, Element-Hosts
+  (ContentControl + InkCanvas.Left/Top-Bindings, DataTemplates je VM), Erkennung,
+  Umwandlung, KI-Menü
+- `Controls/ElementVms.cs` — TextElementVm/BildElementVm/DateiElementVm + PapierMuster
+- `Controls/KiChatPanel.xaml(.cs)` — Chat (➤ Claude / 🎨 Codex), Datei-Anhänge
+- `MainWindow.xaml(.cs)` — Spalten inkl. Chat, Rails, Glow-Animation, Notizbuch-Menüs
+- `docker/claude/Dockerfile` + `docker/einrichten.ps1` — Container (pandoc, weasyprint,
+  graphviz, matplotlib, openpyxl, librsvg, curl)
 
-    ```ink
-    datei: <mdname>.t1.isf
-    hoehe: 320
-    text: erkannter Text (mehrzeilig erlaubt, bis zur schließenden Fence)
-    ```
+## Umgebungs-Hinweise (erspart Debugging)
 
-ISF-Sidecars: `<mdname>.t<n>.isf` (WPF `StrokeCollection.Save/Load`). Beim Speichern
-verwaiste `.t*.isf` löschen. KI-Übergabe (V2): Frontmatter weglassen, Ink-Fences durch
-`text:` ersetzen.
+- **Build/Run:** `dotnet build NotizApp.sln` · EXE:
+  `src\NotizApp\bin\Debug\net9.0-windows10.0.19041.0\NotizApp.exe`. Vor dem Build die
+  laufende App beenden (`Get-Process NotizApp | Stop-Process -Force`) — sonst MSB3027,
+  die App sitzt als Tray-App auch nach Fenster-Schließen im Prozess.
+- **Commits:** mehrzeilige Messages in PowerShell 5.1 scheitern gern (Here-String/`&`) →
+  Message in Datei schreiben und `git commit -F <datei>`.
+- **Codex-CLI:** `%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>\codex.exe` (nicht im PATH).
+  `codex exec` wartet auf Stdin-EOF, wenn Stdin umgeleitet ist → leeren String übergeben
+  und schließen. Sandbox bleibt praktisch read-only; Bilder landen trotzdem in
+  `~/.codex/generated_images/<session-id>/` (Session-Id aus der exec-Kopfzeile parsen).
+- **Docker:** Image `notizapp-claude`, Login-Volume `notizapp-claude-config`,
+  Token optional als `%APPDATA%\NotizApp\claude.env`. `KiService.StelleDockerBereitAsync`
+  startet Docker Desktop bei Bedarf selbst. Nach Dockerfile-Änderung:
+  `docker build -t notizapp-claude docker\claude`.
+- **Fluent-Theme-Falle:** niemals `SystemColors.*BrushKey` für neue UI verwenden —
+  immer die App-Brushes aus `Farbschema.cs` (DynamicResource).
+- Settings-Override für Tests: env `NOTIZAPP_APPDATA`.
 
-### Dateien / Struktur (Namespace NotizApp, deutsche UI-Strings)
+## Bekannte Kanten / mögliche nächste Schritte
 
-1. `Models/Note.cs` — `NoteMeta`, `KundeInfo`, `Note` (INPC für Listen-Anzeige: `AnzeigeTitel`, `AnzeigeUntertitel`, `Vorschau`, `VolltextCache`), `NoteBlock`/`TextBlockContent`/`InkBlockContent` (Datei, ErkannterText, Hoehe, Strokes)
-2. `Services/Frontmatter.cs` — Parse/Write Frontmatter + `BodyFormat` Parse/Write (ink-Fences)
-3. `Services/NoteStore.cs` — LadeAlle (ein Ordner-Level = Notizbücher), LadeTinte (lazy), Speichere (inkl. ISF + Orphan-Cleanup + Volltext-Rebuild), Neu(notizbuch, vorlage), Loesche, Verschiebe, Initialisieren (legt `Eingang`, `Kunden-Anrufe`, `Meetings`, `Nachschlagewerk` + Willkommensnotiz an)
-4. `Services/SettingsService.cs` — JSON in `%APPDATA%\NotizApp\settings.json` (Override `NOTIZAPP_APPDATA`); Felder: DataFolder, HotkeyEnabled, Autostart, QuickNotebook; + `SetzeAutostart(bool)` (Registry)
-5. `Services/InkRecognitionService.cs` — s.o., `Task<string?> ErkenneAsync(StrokeCollection)`
-6. `Services/TaskService.cs` — Regex `^(\s*[-*]\s*\[)( |x|X)(\]\s*)(.*)$` über Text-Blöcke, Fälligkeit `@(\d{4}-\d{2}-\d{2})`; `TaskItem` (Note, BlockIndex, ZeilenIndex, Text, Erledigt, Faellig, Ueberfaellig); Umschalten schreibt Zeile um + speichert
-7. `Services/Templates.cs` — Vorlagen: anruf (📞, Body "Anliegen/Vereinbart/- [ ] Rückruf"), meeting (👥, Titel "Besprechung <Datum>", Teilnehmer/Notizen/Aufgaben), aufgabe (☑), leer (📄)
-8. `Services/TrayService.cs`, `Services/HotkeyService.cs`
-9. `Controls/BlockVms.cs` — `TextBlockVm`/`InkBlockVm` (INPC; InkBlockVm hält StrokeCollection, Hoehe clamp 120–2000)
-10. `Controls/NoteEditor.xaml(.cs)` — Kernstück, siehe unten
-11. `MainWindow.xaml(.cs)` — 3 Spalten mit GridSplittern: Sidebar (Neue Notiz-Button mit Vorlagen-ContextMenu, Ansichten "Alle Notizen"/"Aufgaben", Notizbücher +, Tags, unten ⚙ Einstellungen) | Notizliste mit Suchfeld (+ Aufgabenliste, Visibility-Umschaltung) | Editor. Kontextmenü Notiz: Löschen, Verschieben. Shortcuts: Strg+N/Strg+S/Strg+F/F5. Autosave: 3s-Debounce nach Editor-Änderung + bei Notizwechsel/Close.
-12. `QuickNoteWindow.xaml(.cs)` — Topmost, Vorlagen-ToggleRow (Anruf default), Kundenfelder bei Anruf (Name/Telefon/Dringlichkeit), Titel, Body-TextBox, Expander "✍ Stift" mit InkCanvas, Notizbuch-Combo + Speichern (Strg+Enter, Esc=abbrechen). Leerer Titel → aus Kundenname/erster Zeile ableiten. Dringlichkeit "notfall" → auto-Tag `notfall`.
-13. `FirstRunWindow` (Datenordner wählen, Vorschlag Dokumente\Notizen, `OpenFolderDialog`), `SettingsWindow`, `TextPromptWindow` (Mini-Eingabedialog für neues Notizbuch)
-14. `App.xaml(.cs)` — StartupUri raus, OnStartup: Mutex → Settings → ggf. FirstRun → Store → Tray → Hotkey → MainWindow (außer `--tray`)
+- **Alt-Tinte & Theme:** bereits gezeichnete Striche behalten ihre Farbe; schwarz
+  Gezeichnetes ist im Dark Mode schlecht sichtbar (Umfärben markierter Striche wäre ein
+  sinnvolles Feature: Lasso-Auswahl + Farbklick).
+- **Migration alter Notizen** stapelt mit geschätzten Texthöhen — Feinlayout ggf. von Hand.
+- **Chat-Verlauf** lebt nur pro App-Sitzung (Session-Id nicht persistiert) — Nutzer weiß
+  das; Wiederherstellen beim Start wäre der nächste logische Ausbau (angeboten, noch
+  nicht beauftragt).
+- **Aufgaben-Ansicht:** Einfachklick öffnet die Quell-Notiz NICHT (nur Doppelklick);
+  Verbesserung + „+ Aufgabe"-Knopf wurden besprochen, Nutzer hat noch nicht entschieden.
+- **Fotorealistische Bilder** laufen über Codex (🎨). Falls der Nutzer mehr Kontrolle will:
+  OpenAI-API (gpt-image-1) als Zusatzdienst — nur nach Rückfrage (Kosten).
+- V1.1 laut Roadmap: Export (PDF/Druck), Feinschliff Vorlagen.
 
-### NoteEditor-Design (der heikelste Teil)
+## Nutzer-Präferenzen (Kurzfassung)
 
-- Oben: Titel-TextBox (groß, rahmenlos), Tags-Zeile, Expander **"Kopf: Kundendaten (bleibt lokal, geht nie an die KI)"** mit Name/Telefon/Adresse/Dringlichkeit/Typ
-- Werkzeugleiste: ToggleButtons Stift/Marker/Radierer/Lasso, Farb-Buttons (Blau default — Schwarz ist im Dark Mode unsichtbar!), Dicke (Fein/Mittel/Dick), **ToggleButton "Handschrift → Text"**, "+ Tintenfläche", Speichern
-- Inhalt: ScrollViewer (PanningMode=VerticalOnly) → ItemsControl mit `ObservableCollection<BlockVm>`, DataTemplates per Typ: TextBox (AcceptsReturn, rahmenlos, Binding Text TwoWay/PropertyChanged) bzw. Border+InkCanvas (Strokes-/Height-Binding, unten Resize-Thumb + 🗑-Button)
-- Werkzeug anwenden: InkCanvas-Referenzen über Loaded-Event sammeln, EditingMode + DefaultDrawingAttributes auf alle setzen
-- Erkennung: `StrokeCollection.StrokesChanged` abonnieren (Guard-Flags für Laden/Konvertieren!) → Block in Pending-Set + DispatcherTimer 1,3 s neu starten. Tick: pro Block erkennen; **Toggle AN** → Text an vorhergehenden Text-Block anhängen (ggf. neu einfügen), Strokes leeren; **Toggle AUS** → nur `ErkannterText` aktualisieren (Hintergrunderkennung für Suche/KI)
-- Beim Löschen einer Tintenfläche benachbarte Text-Blöcke mergen; immer ≥1 Text-Block
-
-### Reihenfolge
-
-Models+Services → `dotnet build` → Editor → MainWindow → Quick/FirstRun/Settings/Tray/Hotkey/App → Build → Startlauf mit `NOTIZAPP_APPDATA`-Testordner + Fenster-Screenshot prüfen → Testdaten aufräumen → fertig melden (Startanleitung: `dotnet run --project src/NotizApp`).
-
-## Danach (nicht V1)
-
-- Docker/WSL2 ist nach dem Neustart frisch installiert → irgendwann prüfen (`docker --version`, `wsl --status`), das ist die Basis für V2 (Claude-Container)
-- V1.1: Export/PDF; V2: KI-Anbindung laut KONZEPT Abschnitt 8
+Deutsch; direkt umsetzen statt lange fragen (bei echten Architektur-Weichen kurz fragen —
+AskUserQuestion hat sich bewährt); Datenschutz-Trennung ernst nehmen; er testet selbst
+sofort in der laufenden App und meldet Eindrücke ("gefällt mir nicht" = ernst gemeinter
+Arbeitsauftrag). Memory-Dateien unter `~/.claude/projects/C--Dev-NotizApp-Win/memory/`
+sind aktuell (user-context-shk, notizapp-projekt).
