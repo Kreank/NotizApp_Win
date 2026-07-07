@@ -16,6 +16,7 @@ public partial class KiVorschlagWindow : Window
     readonly KiAktion _aktion;
     readonly string _body;
     readonly string? _auftrag; // gesetzt = Dokument-Modus
+    readonly List<string>? _anhaenge; // Anhänge der Notiz (nur wenn Schalter aktiv)
     readonly CancellationTokenSource _cts = new();
 
     /// <summary>Bestätigter Vorschlagstext; null wenn abgebrochen.</summary>
@@ -25,22 +26,26 @@ public partial class KiVorschlagWindow : Window
     public List<string> ErzeugteDateien { get; } = new();
     string? _ausgabeOrdner;
 
-    public KiVorschlagWindow(KiService ki, KiAktion aktion, string body)
+    public KiVorschlagWindow(KiService ki, KiAktion aktion, string body,
+        List<string>? anhaenge = null)
     {
         _ki = ki;
         _aktion = aktion;
         _body = body;
+        _anhaenge = anhaenge;
         InitializeComponent();
         TitelText.Text = $"✨ {KiService.Beschreibung(aktion)}";
         Loaded += async (_, _) => await StarteAnfrage();
     }
 
     /// <summary>Dokument-Modus: freier Auftrag, Ergebnis sind Dateien.</summary>
-    public KiVorschlagWindow(KiService ki, string auftrag, string body)
+    public KiVorschlagWindow(KiService ki, string auftrag, string body,
+        List<string>? anhaenge = null)
     {
         _ki = ki;
         _auftrag = auftrag;
         _body = body;
+        _anhaenge = anhaenge;
         InitializeComponent();
         TitelText.Text = "📄 Dateien erstellen";
         Loaded += async (_, _) => await StarteAnfrage();
@@ -64,7 +69,7 @@ public partial class KiVorschlagWindow : Window
                 StatusText.Text = "Claude arbeitet am Auftrag… (kann einige Minuten dauern)";
                 _ausgabeOrdner = Path.Combine(Path.GetTempPath(),
                     "NotizApp-KI-" + Guid.NewGuid().ToString("N")[..8]);
-                var dateien = await _ki.ErzeugeDokumentAsync(_auftrag, _body, _ausgabeOrdner, _cts.Token);
+                var dateien = await _ki.ErzeugeDokumentAsync(_auftrag, _body, _ausgabeOrdner, _anhaenge, _cts.Token);
                 ErzeugteDateien.AddRange(dateien);
                 WartePanel.Visibility = Visibility.Collapsed;
                 ErgebnisBox.Text = "Erstellte Dateien:\n\n" +
@@ -77,8 +82,10 @@ public partial class KiVorschlagWindow : Window
                 return;
             }
 
-            StatusText.Text = "Claude denkt nach…";
-            var antwort = await _ki.FrageAsync(_aktion, _body, _cts.Token);
+            StatusText.Text = _anhaenge is { Count: > 0 }
+                ? "Claude denkt nach… (sieht sich auch die Anhänge an)"
+                : "Claude denkt nach…";
+            var antwort = await _ki.FrageAsync(_aktion, _body, _anhaenge, _cts.Token);
             WartePanel.Visibility = Visibility.Collapsed;
             ErgebnisBox.Text = antwort;
             ErgebnisBox.Visibility = Visibility.Visible;

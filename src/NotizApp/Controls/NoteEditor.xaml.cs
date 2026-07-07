@@ -728,6 +728,28 @@ public partial class NoteEditor : UserControl
         return string.IsNullOrWhiteSpace(body) ? null : body;
     }
 
+    /// <summary>Volle Pfade aller Anhänge der Notiz (Bilder + Dateien auf der Fläche).</summary>
+    public List<string> AnhangPfade()
+    {
+        if (_note is null) return new();
+        return _elemente
+            .Select(vm => vm switch
+            {
+                BildElementVm b => b.Datei,
+                DateiElementVm d => d.Datei,
+                _ => null,
+            })
+            .Where(d => !string.IsNullOrWhiteSpace(d))
+            .Select(d => System.IO.Path.Combine(NotizOrdner, d!))
+            .Where(System.IO.File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Anhänge nur, wenn der Schalter im KI-Menü aktiv ist (Opt-in).</summary>
+    List<string>? AktuelleAnhaenge() =>
+        AnhaengeMenuItem.IsChecked && AnhangPfade() is { Count: > 0 } liste ? liste : null;
+
     /// <summary>Text als neues Textfeld unten an die Notiz anfügen (z.B. Chat-Antwort).</summary>
     public void FuegeTextAn(string text)
     {
@@ -986,7 +1008,7 @@ public partial class NoteEditor : UserControl
         var aktion = Enum.Parse<KiAktion>((string)((MenuItem)sender).Tag);
         if (AktuellerKiBody() is not string body) return;
 
-        var dialog = new KiVorschlagWindow(Ki, aktion, body)
+        var dialog = new KiVorschlagWindow(Ki, aktion, body, AktuelleAnhaenge())
         {
             Owner = Window.GetWindow(this),
         };
@@ -1003,7 +1025,7 @@ public partial class NoteEditor : UserControl
         if (string.IsNullOrWhiteSpace(auftrag)) return;
         if (AktuellerKiBody() is not string body) return;
 
-        var dialog = new KiVorschlagWindow(Ki, auftrag, body)
+        var dialog = new KiVorschlagWindow(Ki, auftrag, body, AktuelleAnhaenge())
         {
             Owner = Window.GetWindow(this),
         };

@@ -590,6 +590,10 @@
                             <MenuItem Header="☑ Aufgaben extrahieren" Tag="Aufgaben" Click="KiAktion_Click"/>
                             <Separator/>
                             <MenuItem Header="📄 Dateien erstellen/suchen…" Click="KiDokument_Click"/>
+                            <Separator/>
+                            <MenuItem x:Name="AnhaengeMenuItem" IsCheckable="True"
+                                      Header="🖼 Anhänge mitgeben"
+                                      ToolTip="Bilder und PDFs der Notiz gehen mit an die KI: PDF-Text wird lokal ausgelesen und mitgeschickt, Bilder kann Claude direkt ansehen. Achtung: Damit verlassen auch personenbezogene Inhalte der Anhänge den PC."/>
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>

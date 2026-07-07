@@ -65,6 +65,7 @@ public partial class MainWindow : Window
 
         ChatPanel.Ki = Editor.Ki;
         ChatPanel.HoleNotizKontext = () => Editor.KiBody();
+        ChatPanel.HoleNotizAnhaenge = () => Editor.AnhangPfade();
         ChatPanel.TextEinfuegen += ChatTextEinfuegen;
         ChatPanel.DateiEinfuegen += ChatDateiEinfuegen;
         if (settings.Aktuell.ChatOffen) SetzeChatSichtbar(true);

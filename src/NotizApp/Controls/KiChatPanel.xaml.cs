@@ -38,6 +38,9 @@ public partial class KiChatPanel : UserControl
     /// nie Kopf oder Titel), oder null wenn keine Notiz offen/leer.</summary>
     public Func<string?>? HoleNotizKontext { get; set; }
 
+    /// <summary>Liefert die Anhang-Pfade der aktuellen Notiz (Bilder/Dateien).</summary>
+    public Func<List<string>>? HoleNotizAnhaenge { get; set; }
+
     /// <summary>Text soll unten an die aktuelle Notiz angefügt werden.</summary>
     public event Action<string>? TextEinfuegen;
     /// <summary>Datei soll als Objekt in die aktuelle Notiz gelegt werden.</summary>
@@ -114,7 +117,10 @@ public partial class KiChatPanel : UserControl
 
             StatusText.Text = "Claude arbeitet…";
             var vorher = VorhandeneDateien();
-            var (antwort, session) = await Ki.ChatAsync(prompt, _sessionId, _ausgabeOrdner, _cts.Token);
+            var anhaenge = AnhangCheck.IsChecked == true
+                ? HoleNotizAnhaenge?.Invoke() is { Count: > 0 } liste ? liste : null
+                : null;
+            var (antwort, session) = await Ki.ChatAsync(prompt, _sessionId, _ausgabeOrdner, anhaenge, _cts.Token);
             _sessionId = session;
 
             var nachricht = new ChatNachricht { VonMir = false, Text = antwort };

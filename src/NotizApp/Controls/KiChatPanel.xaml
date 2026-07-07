@@ -78,9 +78,12 @@
                 BorderThickness="1" BorderBrush="{DynamicResource AppRandBrush}"
                 Background="{DynamicResource AppFlaecheBrush}">
             <DockPanel>
-                <CheckBox x:Name="KontextCheck" DockPanel.Dock="Top" Margin="0,0,0,6"
+                <CheckBox x:Name="KontextCheck" DockPanel.Dock="Top" Margin="0,0,0,4"
                           Content="Aktuelle Notiz mitgeben" FontSize="11" IsChecked="True"
                           ToolTip="Schickt den Text der geöffneten Notiz mit (ohne Kundendaten-Kopf)"/>
+                <CheckBox x:Name="AnhangCheck" DockPanel.Dock="Top" Margin="0,0,0,6"
+                          Content="Anhänge (Bilder/PDFs) mitgeben" FontSize="11" IsChecked="False"
+                          ToolTip="Bilder und PDFs der offenen Notiz gehen mit an die KI: PDF-Text wird lokal ausgelesen, Bilder kann Claude ansehen. Achtung: Damit verlassen auch personenbezogene Inhalte der Anhänge den PC."/>
                 <Button x:Name="SendenButton" DockPanel.Dock="Right" Content="➤"
                         Margin="6,0,0,0" Padding="10,4" VerticalAlignment="Bottom"
                         ToolTip="Senden (Enter). Neue Zeile: Umschalt+Enter"

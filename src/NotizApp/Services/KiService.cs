@@ -140,8 +140,11 @@ public class KiService
         }
     }
 
-    /// <summary>Schickt Instruktion + Body an Claude im Container und liefert die Antwort.</summary>
-    public async Task<string> FrageAsync(KiAktion aktion, string body, CancellationToken ct)
+    /// <summary>Schickt Instruktion + Body an Claude im Container und liefert die
+    /// Antwort. Anhänge (Bilder/PDFs) werden — falls übergeben — read-only als
+    /// /anhang gemountet und PDF-Text lokal extrahiert und angehängt.</summary>
+    public async Task<string> FrageAsync(KiAktion aktion, string body,
+        IReadOnlyList<string>? anhaenge, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(body))
             throw new InvalidOperationException("Die Notiz enthält keinen Text für die KI.");
@@ -151,16 +154,92 @@ public class KiService
         var envDatei = Path.Combine(SettingsService.SettingsOrdner, "claude.env");
         var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
 
-        // Instruktion als System-Prompt (wird strikter befolgt), Notiz-Body via stdin
-        var args = $"run --rm -i {envTeil}-v {ConfigVolume}:/home/claude {Image} " +
-                   $"-p --system-prompt {PsQuote(Instruktion(aktion))} --output-format text";
-        var (code, stdout, stderr) = await StarteAsync("docker", args, body, ct, Zeitlimit);
+        var (bodyMitAnhang, mountTeil, tempOrdner) = BereiteAnhaengeVor(body, anhaenge);
+        try
+        {
+            // Instruktion als System-Prompt (wird strikter befolgt), Notiz-Body via stdin.
+            // Mit Anhängen braucht Claude Lesezugriff (Read-Werkzeug) → Permissions
+            // überspringen; der Container ist ohnehin abgeschottet.
+            var rechteTeil = mountTeil.Length > 0 ? "--dangerously-skip-permissions " : "";
+            var args = $"run --rm -i {envTeil}{mountTeil}-v {ConfigVolume}:/home/claude {Image} " +
+                       $"-p {rechteTeil}--system-prompt {PsQuote(Instruktion(aktion))} --output-format text";
+            var zeit = mountTeil.Length > 0 ? TimeSpan.FromMinutes(6) : Zeitlimit;
+            var (code, stdout, stderr) = await StarteAsync("docker", args, bodyMitAnhang, ct, zeit);
 
-        if (code != 0) throw ClaudeFehler(stdout, stderr);
-        var antwort = stdout.Trim();
-        if (antwort.Length == 0)
-            throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
-        return antwort;
+            if (code != 0) throw ClaudeFehler(stdout, stderr);
+            var antwort = stdout.Trim();
+            if (antwort.Length == 0)
+                throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
+            return antwort;
+        }
+        finally
+        {
+            RaeumeAnhangOrdnerAuf(tempOrdner);
+        }
+    }
+
+    // ---------- Anhänge für die KI (Opt-in über den Schalter im KI-Menü/Chat) ----------
+
+    /// <summary>Text einer PDF lokal extrahieren (PdfPig); null bei Scan-PDFs ohne Text.</summary>
+    public static string? PdfText(string pfad, int maxZeichen = 24000)
+    {
+        try
+        {
+            using var doc = UglyToad.PdfPig.PdfDocument.Open(pfad);
+            var sb = new StringBuilder();
+            foreach (var seite in doc.GetPages())
+            {
+                sb.AppendLine(seite.Text);
+                if (sb.Length > maxZeichen) break;
+            }
+            var text = sb.ToString().Trim();
+            if (text.Length == 0) return null;
+            return text.Length > maxZeichen ? text[..maxZeichen] + "…" : text;
+        }
+        catch
+        {
+            return null; // defekte/verschlüsselte PDF → ohne Textauszug weiter
+        }
+    }
+
+    /// <summary>Anhänge in einen Temp-Ordner kopieren (wird read-only als /anhang
+    /// gemountet — nie der Notizen-Ordner selbst) und PDF-Texte an den Body hängen.</summary>
+    static (string Body, string MountTeil, string? TempOrdner) BereiteAnhaengeVor(
+        string body, IReadOnlyList<string>? anhaenge)
+    {
+        if (anhaenge is not { Count: > 0 }) return (body, "", null);
+
+        var temp = Path.Combine(Path.GetTempPath(), "NotizApp-Anhang-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(temp);
+        var sb = new StringBuilder(body);
+        var namen = new List<string>();
+        foreach (var pfad in anhaenge.Where(File.Exists))
+        {
+            var name = Path.GetFileName(pfad);
+            try { File.Copy(pfad, Path.Combine(temp, name), overwrite: true); }
+            catch { continue; }
+            namen.Add(name);
+            if (pfad.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) &&
+                PdfText(pfad) is { } text)
+            {
+                sb.Append($"\n\n--- Anhang {name} (extrahierter PDF-Text) ---\n{text}");
+            }
+        }
+        if (namen.Count == 0)
+        {
+            RaeumeAnhangOrdnerAuf(temp);
+            return (body, "", null);
+        }
+        sb.Append("\n\n[Die Anhänge der Notiz liegen als Dateien unter /anhang: ");
+        sb.Append(string.Join(", ", namen));
+        sb.Append(" — sieh dir Bilder und Dokumente dort bei Bedarf direkt an und beziehe ihren Inhalt ein.]");
+        return (sb.ToString(), $"-v {PsQuote(temp + ":/anhang:ro")} ", temp);
+    }
+
+    static void RaeumeAnhangOrdnerAuf(string? ordner)
+    {
+        if (ordner is null) return;
+        try { Directory.Delete(ordner, recursive: true); } catch { }
     }
 
     static InvalidOperationException ClaudeFehler(string stdout, string stderr)
@@ -214,7 +293,8 @@ public class KiService
     /// Liefert Antwort + Session-Id für die nächste Nachricht.
     /// </summary>
     public async Task<(string Antwort, string? SessionId)> ChatAsync(
-        string nachricht, string? sessionId, string ausgabeOrdner, CancellationToken ct)
+        string nachricht, string? sessionId, string ausgabeOrdner,
+        IReadOnlyList<string>? anhaenge, CancellationToken ct)
     {
         Directory.CreateDirectory(ausgabeOrdner);
 
@@ -222,44 +302,52 @@ public class KiService
         var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
         var resumeTeil = sessionId is null ? "" : $"--resume {PsQuote(sessionId)} ";
 
-        var args = $"run --rm -i {envTeil}" +
-                   $"-v {PsQuote(ausgabeOrdner + ":/ausgabe")} " +
-                   $"-v {ConfigVolume}:/home/claude {Image} " +
-                   $"-p {resumeTeil}--system-prompt {PsQuote(ChatSystem)} " +
-                   "--dangerously-skip-permissions --output-format json";
-
-        var (code, stdout, stderr) = await StarteAsync("docker", args, nachricht, ct,
-            TimeSpan.FromMinutes(10));
-
-        if (code != 0)
-        {
-            // Session im Volume verloren (z.B. Volume neu erstellt) → frisch starten
-            if (sessionId is not null &&
-                (stdout + stderr).Contains("No conversation found", StringComparison.OrdinalIgnoreCase))
-            {
-                return await ChatAsync(nachricht, null, ausgabeOrdner, ct);
-            }
-            throw ClaudeFehler(stdout, stderr);
-        }
-
+        var (nachrichtMitAnhang, mountTeil, tempOrdner) = BereiteAnhaengeVor(nachricht, anhaenge);
         try
         {
-            using var json = System.Text.Json.JsonDocument.Parse(stdout);
-            var antwort = json.RootElement.GetProperty("result").GetString() ?? "";
-            var neueSession = json.RootElement.TryGetProperty("session_id", out var sid)
-                ? sid.GetString()
-                : sessionId;
-            if (antwort.Trim().Length == 0)
-                throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
-            return (antwort.Trim(), neueSession);
+            var args = $"run --rm -i {envTeil}{mountTeil}" +
+                       $"-v {PsQuote(ausgabeOrdner + ":/ausgabe")} " +
+                       $"-v {ConfigVolume}:/home/claude {Image} " +
+                       $"-p {resumeTeil}--system-prompt {PsQuote(ChatSystem)} " +
+                       "--dangerously-skip-permissions --output-format json";
+
+            var (code, stdout, stderr) = await StarteAsync("docker", args, nachrichtMitAnhang, ct,
+                TimeSpan.FromMinutes(10));
+
+            if (code != 0)
+            {
+                // Session im Volume verloren (z.B. Volume neu erstellt) → frisch starten
+                if (sessionId is not null &&
+                    (stdout + stderr).Contains("No conversation found", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await ChatAsync(nachricht, null, ausgabeOrdner, anhaenge, ct);
+                }
+                throw ClaudeFehler(stdout, stderr);
+            }
+
+            try
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(stdout);
+                var antwort = json.RootElement.GetProperty("result").GetString() ?? "";
+                var neueSession = json.RootElement.TryGetProperty("session_id", out var sid)
+                    ? sid.GetString()
+                    : sessionId;
+                if (antwort.Trim().Length == 0)
+                    throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
+                return (antwort.Trim(), neueSession);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Zur Sicherheit: unerwartetes Format → Rohtext anzeigen
+                var roh = stdout.Trim();
+                if (roh.Length == 0)
+                    throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
+                return (roh, sessionId);
+            }
         }
-        catch (System.Text.Json.JsonException)
+        finally
         {
-            // Zur Sicherheit: unerwartetes Format → Rohtext anzeigen
-            var roh = stdout.Trim();
-            if (roh.Length == 0)
-                throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
-            return (roh, sessionId);
+            RaeumeAnhangOrdnerAuf(tempOrdner);
         }
     }
 
@@ -270,7 +358,8 @@ public class KiService
     /// bleibt unerreichbar. Liefert die erzeugten Dateipfade.
     /// </summary>
     public async Task<List<string>> ErzeugeDokumentAsync(
-        string auftrag, string body, string ausgabeOrdner, CancellationToken ct)
+        string auftrag, string body, string ausgabeOrdner,
+        IReadOnlyList<string>? anhaenge, CancellationToken ct)
     {
         Directory.CreateDirectory(ausgabeOrdner);
 
@@ -289,16 +378,27 @@ public class KiService
             "der Notiz steht. Lösche Zwischendateien am Ende, sodass in /ausgabe nur die fertigen " +
             "Dateien liegen. Gib zum Schluss nur die erstellten Dateinamen aus.";
 
-        var args = $"run --rm -i {envTeil}" +
-                   $"-v {PsQuote(ausgabeOrdner + ":/ausgabe")} " +
-                   $"-v {ConfigVolume}:/home/claude {Image} " +
-                   $"-p --system-prompt {PsQuote(system)} " +
-                   "--dangerously-skip-permissions --output-format text";
-        var stdin = $"Auftrag: {auftrag}\n\nNotiz:\n{body}";
+        var stdinBasis = $"Auftrag: {auftrag}\n\nNotiz:\n{body}";
+        var (stdin, mountTeil, tempOrdner) = BereiteAnhaengeVor(stdinBasis, anhaenge);
+        List<string> dateien;
+        int code;
+        string stdout, stderr;
+        try
+        {
+            var args = $"run --rm -i {envTeil}{mountTeil}" +
+                       $"-v {PsQuote(ausgabeOrdner + ":/ausgabe")} " +
+                       $"-v {ConfigVolume}:/home/claude {Image} " +
+                       $"-p --system-prompt {PsQuote(system)} " +
+                       "--dangerously-skip-permissions --output-format text";
 
-        var (code, stdout, stderr) = await StarteAsync("docker", args, stdin, ct,
-            TimeSpan.FromMinutes(8));
-        var dateien = Directory.Exists(ausgabeOrdner)
+            (code, stdout, stderr) = await StarteAsync("docker", args, stdin, ct,
+                TimeSpan.FromMinutes(8));
+        }
+        finally
+        {
+            RaeumeAnhangOrdnerAuf(tempOrdner);
+        }
+        dateien = Directory.Exists(ausgabeOrdner)
             ? Directory.EnumerateFiles(ausgabeOrdner, "*", SearchOption.AllDirectories)
                 .OrderBy(f => f).ToList()
             : new List<string>();
