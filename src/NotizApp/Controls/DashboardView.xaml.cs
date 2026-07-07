@@ -145,6 +145,10 @@ public partial class DashboardView : UserControl
     /// <summary>Ein Termin wurde angeklickt — Host soll die Quell-Notiz öffnen.</summary>
     public event Action<Note>? NotizGeklickt;
 
+    /// <summary>„＋ Termin" oder Doppelklick auf einen Kalendertag — Host soll
+    /// für dieses Datum einen Termin anlegen (Zeile in der Kalender-Notiz).</summary>
+    public event Action<DateTime>? TerminAnlegenAngefordert;
+
     /// <summary>Anstehende Termine (nicht erledigt, mit Datum, ab heute), aufsteigend.</summary>
     List<TaskItem> _termine = new();
     /// <summary>Erster Tag des angezeigten Monats.</summary>
@@ -293,16 +297,33 @@ public partial class DashboardView : UserControl
             Opacity = imMonat ? 1.0 : 0.35, // Vor-/Folgemonat ausgegraut
             Tag = tag,
         };
-        zelle.MouseLeftButtonUp += TagZelle_Click;
+        // MouseDown statt MouseUp: nur dort liefert WPF den ClickCount für den
+        // Doppelklick (Termin anlegen); Einfachklick selektiert/filtert weiter
+        zelle.MouseLeftButtonDown += TagZelle_MausTaste;
         return zelle;
     }
 
-    void TagZelle_Click(object sender, MouseButtonEventArgs e)
+    void TagZelle_MausTaste(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not DateOnly tag) return;
+        if (e.ClickCount == 2)
+        {
+            // Doppelklick: Termin an diesem Tag anlegen (der erste Klick hat
+            // bereits selektiert — das Datum kommt aber explizit mit)
+            TerminAnlegenAngefordert?.Invoke(tag.ToDateTime(TimeOnly.MinValue));
+            e.Handled = true;
+            return;
+        }
         _ausgewaehlt = _ausgewaehlt == tag ? null : tag; // erneuter Klick hebt die Auswahl auf
         ZeichneKalender();
         ZeichneTermine();
+    }
+
+    /// <summary>„＋ Termin"-Knopf: nutzt den selektierten Tag, sonst heute.</summary>
+    void TerminAnlegen_Click(object sender, RoutedEventArgs e)
+    {
+        var tag = _ausgewaehlt ?? DateOnly.FromDateTime(DateTime.Today);
+        TerminAnlegenAngefordert?.Invoke(tag.ToDateTime(TimeOnly.MinValue));
     }
 
     // ---------- Termine ----------

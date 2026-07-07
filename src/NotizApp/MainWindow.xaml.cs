@@ -67,6 +67,7 @@ public partial class MainWindow : Window
         // wurde gerade eben gesetzt — Reihenfolge beachten)
         Dashboard.Ki = Editor.Ki;
         Dashboard.NotizGeklickt += DashboardNotizGeklickt;
+        Dashboard.TerminAnlegenAngefordert += DashboardTerminAnlegen;
 
         ChatPanel.Ki = Editor.Ki;
         ChatPanel.HoleNotizKontext = () => Editor.KiBody();
@@ -88,6 +89,11 @@ public partial class MainWindow : Window
         AktualisiereListe();
         Editor.LadeNote(null);
         ZeigeEditorHinweis();
+
+        // Startansicht ist das Dashboard (Index 0, IsSelected in XAML) — das
+        // SelectionChanged-Event feuerte während InitializeComponent aber noch
+        // gegen den _initialisiert-Guard, daher hier explizit aktivieren
+        SetzeDashboardSichtbar(true);
     }
 
     // ---------- Sidebar ----------
@@ -141,10 +147,11 @@ public partial class MainWindow : Window
 
     void AnsichtListe_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Ansichten: 0 = Dashboard, 1 = Alle Notizen, 2 = Aufgaben
         if (!_initialisiert || _aktualisiere || AnsichtListe.SelectedIndex < 0) return;
-        _aufgabenAnsicht = AnsichtListe.SelectedIndex == 1;
-        SetzeDashboardSichtbar(AnsichtListe.SelectedIndex == 2);
-        if (AnsichtListe.SelectedIndex == 0)
+        _aufgabenAnsicht = AnsichtListe.SelectedIndex == 2;
+        SetzeDashboardSichtbar(AnsichtListe.SelectedIndex == 0);
+        if (AnsichtListe.SelectedIndex == 1)
         {
             // „Alle Notizen" hebt Notizbuch-/Tag-Filter auf
             _aktualisiere = true;
@@ -164,7 +171,7 @@ public partial class MainWindow : Window
         if (_filterNotizbuch is not null)
         {
             _aktualisiere = true;
-            AnsichtListe.SelectedIndex = 0;
+            AnsichtListe.SelectedIndex = 1; // Alle Notizen
             TagListe.SelectedIndex = -1;
             _aktualisiere = false;
             _aufgabenAnsicht = false;
@@ -181,7 +188,7 @@ public partial class MainWindow : Window
         if (_filterTag is not null)
         {
             _aktualisiere = true;
-            AnsichtListe.SelectedIndex = 0;
+            AnsichtListe.SelectedIndex = 1; // Alle Notizen
             NotizbuchListe.SelectedIndex = -1;
             _aktualisiere = false;
             _aufgabenAnsicht = false;
@@ -424,7 +431,7 @@ public partial class MainWindow : Window
         {
             // Tippen in der Suche wechselt zurück zur Notizansicht
             _aktualisiere = true;
-            AnsichtListe.SelectedIndex = 0;
+            AnsichtListe.SelectedIndex = 1; // Alle Notizen
             _aktualisiere = false;
             _aufgabenAnsicht = false;
             SetzeDashboardSichtbar(false);
@@ -511,7 +518,7 @@ public partial class MainWindow : Window
     {
         if (AufgabenListe.SelectedItem is not TaskItem item) return;
         _aktualisiere = true;
-        AnsichtListe.SelectedIndex = 0;
+        AnsichtListe.SelectedIndex = 1; // Alle Notizen
         _aktualisiere = false;
         _aufgabenAnsicht = false;
         _filterNotizbuch = null;
@@ -594,7 +601,7 @@ public partial class MainWindow : Window
     void DashboardNotizGeklickt(Note note)
     {
         _aktualisiere = true;
-        AnsichtListe.SelectedIndex = 0;
+        AnsichtListe.SelectedIndex = 1; // Alle Notizen
         _aktualisiere = false;
         _aufgabenAnsicht = false;
         SetzeDashboardSichtbar(false);
@@ -603,6 +610,53 @@ public partial class MainWindow : Window
         AktualisiereListe();
         NotizListe.SelectedItem = note;
         OeffneNotiz(note);
+    }
+
+    /// <summary>Titel der festen Kalender-Notiz, in der Dashboard-Termine landen.</summary>
+    const string KalenderNotizTitel = "📅 Kalender";
+
+    /// <summary>
+    /// „＋ Termin" bzw. Doppelklick auf einen Kalendertag im Dashboard:
+    /// Termin als normale Aufgabenzeile "- [ ] Text @JJJJ-MM-TT" in die
+    /// Kalender-Notiz schreiben — so erscheint er im Kalender, in der
+    /// Terminliste UND in der Aufgaben-Ansicht und ist durchsuchbar.
+    /// </summary>
+    void DashboardTerminAnlegen(DateTime datum)
+    {
+        var text = TextPromptWindow.Frage(this, "Neuer Termin",
+            $"Termin am {datum:dddd, dd.MM.yyyy}:");
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        // Offene Änderungen zuerst sichern — die Kalender-Notiz könnte gerade offen sein
+        SpeichereAktuelle();
+
+        var note = _store.Notizen.FirstOrDefault(n => n.Meta.Titel == KalenderNotizTitel);
+        if (note is null)
+        {
+            note = _store.Neu("Eingang", "leer");
+            note.Meta.Titel = KalenderNotizTitel;
+        }
+
+        var zeile = $"- [ ] {text} @{datum:yyyy-MM-dd}";
+        if (note.Elemente.OfType<TextElement>().FirstOrDefault() is { } textElement)
+        {
+            textElement.Text = string.IsNullOrWhiteSpace(textElement.Text)
+                ? zeile
+                : textElement.Text.TrimEnd() + "\n" + zeile;
+        }
+        else
+        {
+            note.Elemente.Add(new TextElement { X = 0, Y = 8, Breite = 620, Text = zeile });
+        }
+        _store.Speichere(note);
+
+        if (note == _aktuelleNotiz)
+            Editor.LadeNote(_aktuelleNotiz); // Editor-Inhalt neu laden (wie Aufgabe_Umschalten)
+
+        // Neuer Termin sofort im Kalender (Kupfer-Punkt) + in der Terminliste
+        Dashboard.Aktualisiere(TaskService.Sammle(_store.Notizen));
+        AktualisiereSidebar();
+        AktualisiereListe();
     }
 
     // ---------- Neue Notiz ----------

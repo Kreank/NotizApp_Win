@@ -115,8 +115,14 @@
                         </StackPanel>
                     </Border>
 
-                    <TextBlock Text="Termine" FontSize="15" FontWeight="SemiBold"
-                               Margin="2,20,0,8"/>
+                    <DockPanel Margin="2,20,0,8">
+                        <Button DockPanel.Dock="Right" Content="＋ Termin" FontSize="12"
+                                Style="{StaticResource LeiserButton}"
+                                ToolTip="Termin anlegen — am ausgewählten Kalendertag, sonst heute (auch per Doppelklick auf einen Tag)"
+                                Click="TerminAnlegen_Click"/>
+                        <TextBlock Text="Termine" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                    </DockPanel>
                     <TextBlock x:Name="TermineLeer" FontSize="12" Margin="2,0,0,0"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource AppTextLeiseBrush}"

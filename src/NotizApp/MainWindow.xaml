@@ -105,9 +105,9 @@
                 <TextBlock Text="ANSICHTEN" FontSize="11" Opacity="0.6" Margin="4,0,0,4"/>
                 <ListBox x:Name="AnsichtListe" BorderThickness="0" Background="Transparent"
                          SelectionChanged="AnsichtListe_SelectionChanged">
-                    <ListBoxItem Content="📚 Alle Notizen" IsSelected="True"/>
+                    <ListBoxItem Content="▦ Dashboard" IsSelected="True"/>
+                    <ListBoxItem Content="📚 Alle Notizen"/>
                     <ListBoxItem Content="☑ Aufgaben"/>
-                    <ListBoxItem Content="▦ Dashboard"/>
                 </ListBox>
             </StackPanel>
 

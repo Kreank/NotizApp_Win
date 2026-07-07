@@ -4,8 +4,8 @@ using WF = System.Windows.Forms;
 namespace NotizApp.Services;
 
 /// <summary>
-/// Tray-Icon über WinForms NotifyIcon. Das Icon wird zur Laufzeit gezeichnet
-/// (blauer Kreis mit "N"), damit keine Icon-Ressource nötig ist.
+/// Tray-Icon über WinForms NotifyIcon. Nutzt das App-Icon der EXE;
+/// als Fallback wird zur Laufzeit ein Icon gezeichnet (blauer Kreis mit "N").
 /// </summary>
 public sealed class TrayService : IDisposable
 {
@@ -27,12 +27,30 @@ public sealed class TrayService : IDisposable
 
         _icon = new WF.NotifyIcon
         {
-            Icon = ZeichneIcon(),
+            Icon = HoleIcon(),
             Text = "NotizApp",
             Visible = true,
             ContextMenuStrip = menu,
         };
         _icon.DoubleClick += (_, _) => OeffnenGeklickt?.Invoke();
+    }
+
+    /// <summary>In die EXE eingebettetes App-Icon; scheitert das, das gezeichnete.</summary>
+    static SD.Icon HoleIcon()
+    {
+        try
+        {
+            if (Environment.ProcessPath is { } exe &&
+                SD.Icon.ExtractAssociatedIcon(exe) is { } icon)
+            {
+                return icon;
+            }
+        }
+        catch
+        {
+            // z.B. Zugriffsfehler → gezeichnetes Fallback-Icon
+        }
+        return ZeichneIcon();
     }
 
     static SD.Icon ZeichneIcon()
