@@ -111,6 +111,18 @@
                 </ListBox>
             </StackPanel>
 
+            <StackPanel DockPanel.Dock="Top" Margin="0,14,0,0">
+                <TextBlock Text="WERKZEUGE" FontSize="11" Opacity="0.6" Margin="4,0,0,4"/>
+                <ListBox x:Name="WerkzeugListe" BorderThickness="0" Background="Transparent"
+                         SelectionChanged="WerkzeugListe_SelectionChanged">
+                    <ListBoxItem Content="🔥 Heizlast (überschlägig)"/>
+                    <ListBoxItem Content="💧 Volumenstrom"/>
+                    <ListBoxItem Content="🪣 Wasserinhalt"/>
+                    <ListBoxItem Content="🫙 Ausdehnungsgefäß"/>
+                    <ListBoxItem Content="🔁 Einheiten-Umrechner"/>
+                </ListBox>
+            </StackPanel>
+
             <DockPanel DockPanel.Dock="Top" Margin="4,14,0,4">
                 <Button DockPanel.Dock="Right" Content="＋" Padding="6,0"
                         BorderThickness="0" Background="Transparent"
@@ -267,6 +279,14 @@
 
             <!-- Dashboard-Ansicht (Sidebar „▦ Dashboard") — liegt über dem Editor -->
             <controls:DashboardView x:Name="Dashboard" Visibility="Collapsed"/>
+
+            <!-- Werkzeuge (Sidebar „WERKZEUGE") — liegen ebenfalls über dem Editor.
+                 Reihenfolge muss zur WerkzeugListe passen (ZeigeWerkzeug per Index). -->
+            <controls:HeizlastRechner x:Name="HeizlastTool" Visibility="Collapsed"/>
+            <controls:VolumenstromRechner x:Name="VolumenstromTool" Visibility="Collapsed"/>
+            <controls:WasserinhaltRechner x:Name="WasserinhaltTool" Visibility="Collapsed"/>
+            <controls:AusdehnungsgefaessRechner x:Name="AusdehnungTool" Visibility="Collapsed"/>
+            <controls:EinheitenUmrechner x:Name="UmrechnerTool" Visibility="Collapsed"/>
 
             <!-- Schwebende Chat-Bubble: immer erreichbar, auch ohne offene Notiz -->
             <Button x:Name="ChatBubble" Width="46" Height="46"

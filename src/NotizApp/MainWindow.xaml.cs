@@ -76,6 +76,12 @@ public partial class MainWindow : Window
         ChatPanel.DateiEinfuegen += ChatDateiEinfuegen;
         if (settings.Aktuell.ChatOffen) SetzeChatSichtbar(true);
 
+        // Werkzeuge: Ergebnis in die aktuelle Notiz einfügen (wie beim Chat)
+        HeizlastTool.ErgebnisEinfuegen += ChatTextEinfuegen;
+        VolumenstromTool.ErgebnisEinfuegen += ChatTextEinfuegen;
+        WasserinhaltTool.ErgebnisEinfuegen += ChatTextEinfuegen;
+        AusdehnungTool.ErgebnisEinfuegen += ChatTextEinfuegen;
+
         _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _autosaveTimer.Tick += (_, _) => { _autosaveTimer.Stop(); SpeichereAktuelle(); };
 
@@ -149,6 +155,7 @@ public partial class MainWindow : Window
     {
         // Ansichten: 0 = Dashboard, 1 = Alle Notizen, 2 = Aufgaben
         if (!_initialisiert || _aktualisiere || AnsichtListe.SelectedIndex < 0) return;
+        VerlasseWerkzeug();
         _aufgabenAnsicht = AnsichtListe.SelectedIndex == 2;
         SetzeDashboardSichtbar(AnsichtListe.SelectedIndex == 0);
         if (AnsichtListe.SelectedIndex == 1)
@@ -167,6 +174,7 @@ public partial class MainWindow : Window
     void NotizbuchListe_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_aktualisiere) return;
+        VerlasseWerkzeug();
         _filterNotizbuch = (NotizbuchListe.SelectedItem as ListBoxItem)?.Tag as string;
         if (_filterNotizbuch is not null)
         {
@@ -184,6 +192,7 @@ public partial class MainWindow : Window
     void TagListe_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_aktualisiere) return;
+        VerlasseWerkzeug();
         _filterTag = (TagListe.SelectedItem as ListBoxItem)?.Tag as string;
         if (_filterTag is not null)
         {
@@ -196,6 +205,52 @@ public partial class MainWindow : Window
             _filterNotizbuch = null;
         }
         AktualisiereListe();
+    }
+
+    // ---------- Werkzeuge ----------
+
+    bool _werkzeugAnsicht;
+
+    /// <summary>Werkzeug-Ansichten in der Reihenfolge der WERKZEUGE-Liste
+    /// (Index = Listeneintrag). Bei neuem Tool hier und in der Liste ergänzen.</summary>
+    UIElement[] Werkzeuge => new UIElement[]
+        { HeizlastTool, VolumenstromTool, WasserinhaltTool, AusdehnungTool, UmrechnerTool };
+
+    /// <summary>Auswahl in der WERKZEUGE-Liste: das gewählte Tool über den Editor legen.</summary>
+    void WerkzeugListe_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_aktualisiere || WerkzeugListe.SelectedIndex < 0) return;
+        // Nur ein Eintrag hervorheben: andere Navigationslisten abwählen
+        _aktualisiere = true;
+        AnsichtListe.SelectedIndex = -1;
+        NotizbuchListe.SelectedIndex = -1;
+        TagListe.SelectedIndex = -1;
+        _aktualisiere = false;
+        SetzeDashboardSichtbar(false);
+        ZeigeWerkzeug(WerkzeugListe.SelectedIndex);
+    }
+
+    /// <summary>Das Tool mit dem gegebenen Index zeigen, die übrigen ausblenden
+    /// (index &lt; 0 blendet alle aus und gibt den Editor frei).</summary>
+    void ZeigeWerkzeug(int index)
+    {
+        _werkzeugAnsicht = index >= 0;
+        var tools = Werkzeuge;
+        for (int i = 0; i < tools.Length; i++)
+            tools[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        Editor.Visibility = _werkzeugAnsicht ? Visibility.Collapsed : Visibility.Visible;
+        ZeigeEditorHinweis();
+    }
+
+    /// <summary>Werkzeug-Ansicht verlassen (Auswahl aufheben, Tools ausblenden) —
+    /// wird beim Wechsel zu einer Ansicht/Notiz aufgerufen.</summary>
+    void VerlasseWerkzeug()
+    {
+        if (!_werkzeugAnsicht && WerkzeugListe.SelectedIndex < 0) return;
+        _aktualisiere = true;
+        WerkzeugListe.SelectedIndex = -1;
+        _aktualisiere = false;
+        ZeigeWerkzeug(-1);
     }
 
     /// <summary>Ordner-Silhouette (Mappe mit Reiter) für die Sidebar — einfärbbar,
@@ -532,6 +587,7 @@ public partial class MainWindow : Window
 
     public void OeffneNotiz(Note note)
     {
+        VerlasseWerkzeug();
         SpeichereAktuelle();
         _aktuelleNotiz = note;
         _store.LadeTinte(note);
@@ -572,7 +628,7 @@ public partial class MainWindow : Window
     void ZeigeEditorHinweis() =>
         // Im Dashboard keinen „Keine Notiz"-Hinweis über die Ansicht legen
         EditorLeerHinweis.Visibility =
-            _aktuelleNotiz is null && !_dashboardAnsicht
+            _aktuelleNotiz is null && !_dashboardAnsicht && !_werkzeugAnsicht
                 ? Visibility.Visible : Visibility.Collapsed;
 
     // ---------- Dashboard ----------

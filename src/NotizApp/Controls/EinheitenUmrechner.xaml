@@ -1,0 +1,62 @@
+<UserControl x:Class="NotizApp.Controls.EinheitenUmrechner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="FeldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="Eingabe" TargetType="TextBox">
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Background" Value="{DynamicResource AppFlaecheTiefBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+        <StackPanel Margin="24" MaxWidth="540" HorizontalAlignment="Left">
+
+            <TextBlock Text="🔁 Einheiten-Umrechner" FontSize="22" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppTextBrush}"/>
+            <TextBlock Text="Leistung, Druck, Temperatur, Volumenstrom, Energie"
+                       FontSize="13" Margin="0,2,0,20"
+                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+
+            <Border Background="{DynamicResource AppFlaecheBrush}"
+                    BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                    CornerRadius="10" Padding="18">
+                <StackPanel>
+                    <TextBlock Text="Größe" Style="{StaticResource FeldLabel}"/>
+                    <ComboBox x:Name="KategorieBox" Margin="0,0,0,16" Padding="8,6" FontSize="14"
+                              SelectionChanged="Kategorie_Changed"/>
+
+                    <TextBlock Text="Wert" Style="{StaticResource FeldLabel}"/>
+                    <DockPanel>
+                        <ComboBox x:Name="VonBox" DockPanel.Dock="Right" Width="130"
+                                  Margin="8,0,0,0" Padding="8,6" FontSize="14"
+                                  SelectionChanged="Von_Changed"/>
+                        <TextBox x:Name="WertBox" Style="{StaticResource Eingabe}"
+                                 TextChanged="Wert_Changed"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{DynamicResource AppAkzentLeiseBrush}"
+                    CornerRadius="10" Padding="18" Margin="0,16,0,0">
+                <StackPanel x:Name="ErgebnisListe"/>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                <Button x:Name="KopierenButton" Content="📋 Kopieren"
+                        Padding="12,7" Click="Kopieren_Click"/>
+            </StackPanel>
+            <TextBlock x:Name="HinweisText" Text="" FontSize="12" Margin="0,10,0,0"
+                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,91 @@
+<UserControl x:Class="NotizApp.Controls.HeizlastRechner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="FeldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="Eingabe" TargetType="TextBox">
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Background" Value="{DynamicResource AppFlaecheTiefBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+        <StackPanel Margin="24" MaxWidth="540" HorizontalAlignment="Left">
+
+            <!-- ===== Kopfzeile ===== -->
+            <TextBlock Text="🔥 Überschlägige Heizlast" FontSize="22" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppTextBrush}"/>
+            <TextBlock Text="Variante B — beheizte Fläche × spezifische Heizlast"
+                       FontSize="13" Margin="0,2,0,20"
+                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+
+            <!-- ===== Eingabe-Karte ===== -->
+            <Border Background="{DynamicResource AppFlaecheBrush}"
+                    BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                    CornerRadius="10" Padding="18">
+                <StackPanel>
+                    <TextBlock Text="Beheizte Fläche" Style="{StaticResource FeldLabel}"/>
+                    <DockPanel Margin="0,0,0,16">
+                        <TextBlock DockPanel.Dock="Right" Text="m²" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" FontSize="15"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                        <TextBox x:Name="FlaecheBox" Style="{StaticResource Eingabe}"
+                                 TextChanged="Eingabe_Changed"/>
+                    </DockPanel>
+
+                    <TextBlock Text="Gebäude / Dämmung" Style="{StaticResource FeldLabel}"/>
+                    <ComboBox x:Name="TypBox" Margin="0,0,0,16" Padding="8,6" FontSize="14"
+                              SelectionChanged="TypBox_Changed">
+                        <ComboBoxItem Content="Neubau" Tag="80"/>
+                        <ComboBoxItem Content="Altbau, von außen gedämmt" Tag="100"/>
+                        <ComboBoxItem Content="Altbau, nicht gedämmt" Tag="120" IsSelected="True"/>
+                        <ComboBoxItem Content="Altbau, nicht gedämmt + alte Fenster" Tag="150"/>
+                    </ComboBox>
+
+                    <TextBlock Text="Spezifische Heizlast (überschreibbar)"
+                               Style="{StaticResource FeldLabel}"/>
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="W/m²" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" FontSize="15"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                        <TextBox x:Name="KennwertBox" Style="{StaticResource Eingabe}"
+                                 TextChanged="Eingabe_Changed"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== Ergebnis-Karte ===== -->
+            <Border Background="{DynamicResource AppAkzentLeiseBrush}"
+                    CornerRadius="10" Padding="18" Margin="0,16,0,0">
+                <StackPanel>
+                    <TextBlock Text="Heizlast" Style="{StaticResource FeldLabel}"/>
+                    <TextBlock x:Name="ErgebnisKw" Text="—" FontSize="30" FontWeight="Bold"
+                               Foreground="{DynamicResource AppTextBrush}"/>
+                    <TextBlock x:Name="ErgebnisFormel" Text="" FontSize="13" Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== Aktionen ===== -->
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                <Button x:Name="EinfuegenButton" Content="➕ In Notiz einfügen"
+                        Padding="12,7" Margin="0,0,10,0" Click="Einfuegen_Click"/>
+                <Button x:Name="KopierenButton" Content="📋 Kopieren"
+                        Padding="12,7" Click="Kopieren_Click"/>
+            </StackPanel>
+
+            <TextBlock x:Name="HinweisText" Text="" FontSize="12" Margin="0,10,0,0"
+                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
