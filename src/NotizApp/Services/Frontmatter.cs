@@ -226,6 +226,7 @@ public static partial class Frontmatter
                         Url = attrs.GetValueOrDefault("url", ""),
                         Titel = attrs.GetValueOrDefault("titel", ""),
                         Hoehe = Zahl("h", 76),
+                        VorschauDatei = attrs.GetValueOrDefault("vorschau", ""),
                     },
                     "tabelle" => new TabelleElement
                     {
@@ -518,7 +519,10 @@ public static partial class Frontmatter
                     var titel = Bereinige(l.Titel).Replace('"', '\'');
                     if (titel.Length > 200) titel = titel[..200];
                     var url = Bereinige(l.Url).Replace('"', '\'');
-                    sb.Append($"<!--el link {pos} h={(int)l.Hoehe} url=\"{url}\" titel=\"{titel}\"-->\n\n");
+                    sb.Append($"<!--el link {pos} h={(int)l.Hoehe} url=\"{url}\" titel=\"{titel}\"");
+                    if (!string.IsNullOrWhiteSpace(l.VorschauDatei))
+                        sb.Append($" vorschau=\"{l.VorschauDatei}\"");
+                    sb.Append("-->\n\n");
                     break;
                 case TabelleElement tab when tab.Zeilen.Count > 0:
                     sb.Append($"<!--el tabelle {pos}");

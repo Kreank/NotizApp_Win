@@ -359,20 +359,29 @@
                 <Border Background="{DynamicResource AppFlaecheBrush}"
                         CornerRadius="6" BorderThickness="1"
                         BorderBrush="{DynamicResource AppRandBrush}"
-                        Padding="8" ToolTip="Doppelklick: Link im Browser öffnen">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Left" Text="🔗" FontSize="22"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Titel}" FontWeight="SemiBold"
-                                       TextWrapping="Wrap" MaxHeight="38"
-                                       TextTrimming="CharacterEllipsis"
-                                       Foreground="{DynamicResource AppTextBrush}"/>
-                            <TextBlock Text="{Binding Domain}" FontSize="11" Margin="0,2,0,0"
-                                       TextTrimming="CharacterEllipsis"
-                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                        </StackPanel>
-                    </DockPanel>
+                        ToolTip="Doppelklick: Link im Browser öffnen">
+                    <Grid>
+                        <!-- Gerenderte Seiten-Vorschau (falls vorhanden) über der Titelzeile -->
+                        <Border x:Name="VorschauRahmen" Visibility="Collapsed"
+                                Margin="1,1,1,52" ClipToBounds="True"
+                                CornerRadius="5,5,0,0" Background="White">
+                            <Image Source="{Binding Vorschau}" Stretch="UniformToFill"
+                                   VerticalAlignment="Top"/>
+                        </Border>
+                        <DockPanel x:Name="TitelZeile" Margin="8,0" VerticalAlignment="Center">
+                            <TextBlock DockPanel.Dock="Left" Text="🔗" FontSize="22"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="TitelText" Text="{Binding Titel}" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" MaxHeight="38"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource AppTextBrush}"/>
+                                <TextBlock Text="{Binding Domain}" FontSize="11" Margin="0,2,0,0"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Grid>
                 </Border>
                 <!-- Ganzflächiger Griff: im Auswahl-Modus direkt anfassbar -->
                 <Thumb Cursor="SizeAll" DragDelta="ElementVerschieben_DragDelta">
@@ -386,6 +395,11 @@
                         Style="{StaticResource LoeschKnopf}"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
                         Click="ElementLoeschen_Click"/>
+                <Button x:Name="NeuLadenKnopf" Content="⟳" Opacity="0"
+                        Style="{StaticResource LoeschKnopf}"
+                        ToolTip="Titel und Vorschau neu laden"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="4,4,28,4" Click="LinkNeuLaden_Click"/>
                 <Button x:Name="PdfKnopf" Content="⬇ PDF" Opacity="0" FontSize="11"
                         Style="{StaticResource LoeschKnopf}"
                         ToolTip="Seite als PDF neben der Notiz sichern"
@@ -400,9 +414,17 @@
             <DataTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter TargetName="Loeschen" Property="Opacity" Value="1"/>
+                    <Setter TargetName="NeuLadenKnopf" Property="Opacity" Value="1"/>
                     <Setter TargetName="PdfKnopf" Property="Opacity" Value="1"/>
                     <Setter TargetName="EckGriff" Property="Opacity" Value="0.8"/>
                 </Trigger>
+                <!-- Mit Vorschau: Bild füllt die Karte, Titelzeile kompakt darunter -->
+                <DataTrigger Binding="{Binding HatVorschau}" Value="True">
+                    <Setter TargetName="VorschauRahmen" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="TitelZeile" Property="VerticalAlignment" Value="Bottom"/>
+                    <Setter TargetName="TitelZeile" Property="Height" Value="52"/>
+                    <Setter TargetName="TitelText" Property="TextWrapping" Value="NoWrap"/>
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </UserControl.Resources>

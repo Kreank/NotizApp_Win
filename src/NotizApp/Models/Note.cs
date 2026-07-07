@@ -71,6 +71,8 @@ public class LinkElement : NoteElement
     public string Url { get; set; } = "";
     public string Titel { get; set; } = "";
     public double Hoehe { get; set; } = 76;
+    /// <summary>Screenshot der Seite (Dateiname neben der .md), leer = keine Vorschau.</summary>
+    public string VorschauDatei { get; set; } = "";
 }
 
 /// <summary>Tabelle auf der Fläche: Zeilen mit Textzellen, erste Zeile ist die

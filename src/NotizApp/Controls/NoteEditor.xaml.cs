@@ -152,6 +152,8 @@ public partial class NoteEditor : UserControl
                     bild.LadeBild(NotizOrdner);
                 if (vm is DateiElementVm datei)
                     _ = datei.LadeVorschauAsync(NotizOrdner);
+                if (vm is LinkElementVm link)
+                    link.LadeVorschau(NotizOrdner);
                 if (vm is TabelleElementVm tabelle)
                     tabelle.SetzeOrdner(NotizOrdner);
                 FuegeElementHinzu(vm);
@@ -999,7 +1001,14 @@ public partial class NoteEditor : UserControl
         FuegeElementHinzu(vm);
         PasseHoeheAn();
         MeldeAenderung();
-        _ = LadeLinkTitelAsync(vm);
+        _ = LadeLinkDatenAsync(vm);
+    }
+
+    /// <summary>Titel und Seiten-Vorschau einer Link-Karte nachladen (wirft nie).</summary>
+    async Task LadeLinkDatenAsync(LinkElementVm vm)
+    {
+        await LadeLinkTitelAsync(vm);
+        await ErzeugeLinkVorschauAsync(vm);
     }
 
     /// <summary>Text/URL aus einem DataObject holen (Browser liefern beides).</summary>
@@ -1097,6 +1106,115 @@ public partial class NoteEditor : UserControl
         PasseHoeheAn();
     }
 
+    /// <summary>Domain der Karte als dateinamens-tauglicher Baustein ("seite" als Fallback).</summary>
+    static string DateiTauglicheDomain(LinkElementVm vm)
+    {
+        var domain = vm.Domain.Length > 0 ? vm.Domain : "seite";
+        foreach (var c in System.IO.Path.GetInvalidFileNameChars())
+            domain = domain.Replace(c, '-');
+        return domain;
+    }
+
+    /// <summary>Edge headless laufen lassen; false bei Timeout (Prozess wird beendet).</summary>
+    static async Task<bool> StarteEdgeHeadlessAsync(string edge, string argumente, TimeSpan timeout)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo(edge, argumente)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using var prozess = System.Diagnostics.Process.Start(psi);
+        if (prozess is null) return false;
+        using var cts = new CancellationTokenSource(timeout);
+        try
+        {
+            await prozess.WaitForExitAsync(cts.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            try { prozess.Kill(entireProcessTree: true); } catch { }
+            return false;
+        }
+    }
+
+    /// <summary>Seiten-Screenshot headless mit Edge erzeugen, neben die Notiz
+    /// kopieren und als Karten-Vorschau übernehmen. Scheitert leise (kein Dialog).</summary>
+    async Task ErzeugeLinkVorschauAsync(LinkElementVm vm)
+    {
+        if (_note is null) return;
+        var url = vm.Url.Trim();
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        var edge = FindeEdge();
+        if (edge is null) return;
+
+        string? temp = null;
+        try
+        {
+            temp = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                $"vorschau-{DateiTauglicheDomain(vm)}.png");
+            try { System.IO.File.Delete(temp); } catch { }
+
+            var ok = await StarteEdgeHeadlessAsync(edge,
+                $"--headless --disable-gpu --screenshot=\"{temp}\" --window-size=1280,900 --hide-scrollbars \"{url}\"",
+                TimeSpan.FromSeconds(45));
+            if (!ok || _note is null || !_elemente.Contains(vm) ||
+                !System.IO.File.Exists(temp) || new System.IO.FileInfo(temp).Length == 0)
+            {
+                return;
+            }
+
+            // Alte Vorschau-Datei ersetzen (⟳ lädt neu, es soll kein Datei-Müll bleiben)
+            if (vm.VorschauDatei.Length > 0)
+            {
+                try { System.IO.File.Delete(System.IO.Path.Combine(NotizOrdner, vm.VorschauDatei)); }
+                catch { }
+            }
+            vm.VorschauDatei = KopiereAnhang(temp);
+            vm.LadeVorschau(NotizOrdner);
+            // Standardgröße vergrößern, sofern der Nutzer sie noch nicht angefasst hat
+            if (vm.HatVorschau && Math.Abs(vm.Hoehe - 76) < 0.5)
+                vm.Hoehe = 260; // Bild + kompakte Titelzeile
+            PasseHoeheAn();
+            MeldeAenderung();
+        }
+        catch
+        {
+            // ohne Vorschau weiter — die 🔗-Karte funktioniert trotzdem
+        }
+        finally
+        {
+            if (temp is not null)
+            {
+                try { System.IO.File.Delete(temp); } catch { }
+            }
+        }
+    }
+
+    /// <summary>„⟳": Titel und Seiten-Vorschau der Link-Karte neu laden
+    /// (auch für Links, die vor dem Vorschau-Feature angelegt wurden).</summary>
+    async void LinkNeuLaden_Click(object sender, RoutedEventArgs e)
+    {
+        if (_note is null || sender is not Button knopf) return;
+        if (VmVon<LinkElementVm>(sender) is not { } vm) return;
+        var alterInhalt = knopf.Content;
+        knopf.Content = "⌛";
+        knopf.IsEnabled = false;
+        try
+        {
+            await LadeLinkDatenAsync(vm);
+        }
+        finally
+        {
+            knopf.Content = alterInhalt;
+            knopf.IsEnabled = true;
+        }
+    }
+
     /// <summary>msedge.exe suchen: App-Paths-Registry, sonst Standard-Installationspfade.</summary>
     static string? FindeEdge()
     {
@@ -1152,33 +1270,13 @@ public partial class NoteEditor : UserControl
         string? temp = null;
         try
         {
-            var domain = vm.Domain.Length > 0 ? vm.Domain : "seite";
-            foreach (var c in System.IO.Path.GetInvalidFileNameChars())
-                domain = domain.Replace(c, '-');
-            temp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"clip-{domain}.pdf");
+            temp = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                $"clip-{DateiTauglicheDomain(vm)}.pdf");
             try { System.IO.File.Delete(temp); } catch { }
 
-            var psi = new System.Diagnostics.ProcessStartInfo(edge,
-                $"--headless --disable-gpu --print-to-pdf=\"{temp}\" --print-to-pdf-no-header \"{url}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using (var prozess = System.Diagnostics.Process.Start(psi))
-            {
-                if (prozess is not null)
-                {
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                    try
-                    {
-                        await prozess.WaitForExitAsync(cts.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        try { prozess.Kill(entireProcessTree: true); } catch { }
-                    }
-                }
-            }
+            await StarteEdgeHeadlessAsync(edge,
+                $"--headless --disable-gpu --print-to-pdf=\"{temp}\" --print-to-pdf-no-header \"{url}\"",
+                TimeSpan.FromSeconds(60));
 
             if (_note is not null && System.IO.File.Exists(temp) &&
                 new System.IO.FileInfo(temp).Length > 0)

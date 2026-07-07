@@ -372,6 +372,42 @@ public class LinkElementVm : ElementVm
         set { if (Setze(ref _hoehe, Math.Max(MinHoehe, value))) MeldeGeaendert(); }
     }
 
+    /// <summary>Dateiname des Seiten-Screenshots neben der Notiz, leer = keine Vorschau.</summary>
+    public string VorschauDatei { get; set; } = "";
+
+    ImageSource? _vorschau;
+    /// <summary>Gerenderte Seiten-Vorschau (null = 🔗-Karte ohne Bild).</summary>
+    public ImageSource? Vorschau
+    {
+        get => _vorschau;
+        private set { _vorschau = value; OnChanged(); OnChanged(nameof(HatVorschau)); }
+    }
+
+    public bool HatVorschau => _vorschau is not null;
+
+    /// <summary>Screenshot laden (ohne Datei-Lock, klein dekodiert); Fehler → keine Vorschau.</summary>
+    public void LadeVorschau(string ordner)
+    {
+        if (string.IsNullOrWhiteSpace(VorschauDatei)) return;
+        try
+        {
+            var pfad = Path.Combine(ordner, VorschauDatei);
+            if (!File.Exists(pfad)) return;
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad; // Datei sofort wieder freigeben
+            bmp.DecodePixelWidth = 640; // Karten-Vorschau — spart Speicher
+            bmp.UriSource = new Uri(pfad);
+            bmp.EndInit();
+            bmp.Freeze();
+            Vorschau = bmp;
+        }
+        catch
+        {
+            Vorschau = null; // defektes/fehlendes Bild → 🔗-Karte reicht
+        }
+    }
+
     public override double Unterkante => Y + Hoehe;
 
     public LinkElementVm() { }
@@ -381,11 +417,18 @@ public class LinkElementVm : ElementVm
         _url = el.Url;
         _titel = el.Titel;
         _hoehe = Math.Max(MinHoehe, el.Hoehe);
+        VorschauDatei = el.VorschauDatei;
     }
 
     public override NoteElement ZuModel()
     {
-        var el = new LinkElement { Url = Url, Titel = Titel, Hoehe = Hoehe };
+        var el = new LinkElement
+        {
+            Url = Url,
+            Titel = Titel,
+            Hoehe = Hoehe,
+            VorschauDatei = VorschauDatei,
+        };
         UebernehmePosition(el);
         return el;
     }
