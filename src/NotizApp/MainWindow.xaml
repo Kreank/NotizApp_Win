@@ -17,16 +17,57 @@
         <KeyBinding Modifiers="Control+Shift" Key="B" Command="{Binding ListeToggleCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
     </Window.InputBindings>
 
+    <Window.Resources>
+        <!-- Spalten-Trenner: dezente Linie, beim Drüberfahren deutlich (vorher
+             unsichtbar — die Griffstelle war praktisch nicht zu finden) -->
+        <Style x:Key="SpaltenSplitter" TargetType="GridSplitter">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Border Background="Transparent">
+                            <Rectangle x:Name="Linie" Width="1" Margin="0,10"
+                                       HorizontalAlignment="Center" RadiusX="1" RadiusY="1"
+                                       Fill="{DynamicResource AppRandBrush}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Linie" Property="Width" Value="3"/>
+                                <Setter TargetName="Linie" Property="Fill"
+                                        Value="{DynamicResource AppAkzentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Linie" Property="Width" Value="3"/>
+                                <Setter TargetName="Linie" Property="Fill"
+                                        Value="{DynamicResource AppAkzentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="SidebarSpalte" Width="230" MinWidth="170"/>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition x:Name="ListeSpalte" Width="330" MinWidth="240"/>
             <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*" MinWidth="360"/>
+            <ColumnDefinition Width="*" MinWidth="280"/>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition x:Name="ChatSpalte" Width="0"/>
         </Grid.ColumnDefinitions>
+
+        <!-- Firmen-Artwork als Hauch hinter allem; die Licht-Schimmer treiben darüber.
+             Deckkraft je Design aus dem Farbschema (dunkel etwas präsenter als hell). -->
+        <Image Grid.ColumnSpan="7" IsHitTestVisible="False"
+               Source="pack://application:,,,/Assets/hintergrund-mitra.png"
+               Stretch="UniformToFill"
+               Opacity="{DynamicResource AppFondBildOpazitaet}"/>
 
         <!-- „Kupfer & Wasser": zwei sehr langsam treibende Licht-Schimmer hinter
              allen Inhalten (Animation startet im Code-Behind, respektiert die
@@ -101,8 +142,8 @@
             </StackPanel>
         </Button>
 
-        <GridSplitter x:Name="SplitterLinks" Grid.Column="1" Width="4" HorizontalAlignment="Center"
-                      VerticalAlignment="Stretch" Background="Transparent"/>
+        <GridSplitter x:Name="SplitterLinks" Grid.Column="1"
+                      Style="{StaticResource SpaltenSplitter}"/>
 
         <!-- ===== Mittlere Spalte: Suche + Notizliste / Aufgabenliste ===== -->
         <DockPanel x:Name="ListePanel" Grid.Column="2" Margin="4,10,4,10">
@@ -207,8 +248,8 @@
             </StackPanel>
         </Button>
 
-        <GridSplitter x:Name="SplitterRechts" Grid.Column="3" Width="4" HorizontalAlignment="Center"
-                      VerticalAlignment="Stretch" Background="Transparent"/>
+        <GridSplitter x:Name="SplitterRechts" Grid.Column="3"
+                      Style="{StaticResource SpaltenSplitter}"/>
 
         <!-- ===== Editor ===== -->
         <Grid Grid.Column="4">
@@ -246,8 +287,8 @@
             </Button>
         </Grid>
 
-        <GridSplitter x:Name="SplitterChat" Grid.Column="5" Width="4" HorizontalAlignment="Center"
-                      VerticalAlignment="Stretch" Background="Transparent" Visibility="Collapsed"/>
+        <GridSplitter x:Name="SplitterChat" Grid.Column="5"
+                      Style="{StaticResource SpaltenSplitter}" Visibility="Collapsed"/>
 
         <!-- ===== KI-Chat ===== -->
         <controls:KiChatPanel x:Name="ChatPanel" Grid.Column="6" Visibility="Collapsed"/>

@@ -299,7 +299,8 @@ public class KiService
         var (code, stdout, stderr) = await StarteAsync("docker", args, stdin, ct,
             TimeSpan.FromMinutes(8));
         var dateien = Directory.Exists(ausgabeOrdner)
-            ? Directory.EnumerateFiles(ausgabeOrdner).OrderBy(f => f).ToList()
+            ? Directory.EnumerateFiles(ausgabeOrdner, "*", SearchOption.AllDirectories)
+                .OrderBy(f => f).ToList()
             : new List<string>();
 
         if (dateien.Count == 0)
@@ -363,6 +364,7 @@ public class KiService
                    $"-s read-only {PsQuote(prompt)}";
 
         // stdin leer übergeben und schließen — sonst wartet codex exec auf Eingabe
+        var startZeit = DateTime.UtcNow.AddMinutes(-1); // kleine Uhren-Toleranz
         var (code, stdout, stderr) = await StarteAsync(codex, args, "", ct,
             TimeSpan.FromMinutes(8));
         if (code != 0)
@@ -372,27 +374,37 @@ public class KiService
             throw new InvalidOperationException($"Codex-Aufruf fehlgeschlagen:\n{fehler}");
         }
 
-        // Session-Ordner aus dem Kopf der exec-Ausgabe ("session id: <uuid>")
-        var session = System.Text.RegularExpressions.Regex
-            .Match(stdout, @"session id: ([0-9a-f\-]{16,})");
+        // Session-Ordner aus dem Kopf der exec-Ausgabe ("session id: <uuid>";
+        // das Format hat sich zwischen Codex-Versionen schon geändert, daher tolerant)
+        var session = System.Text.RegularExpressions.Regex.Match(
+            stdout + "\n" + stderr, @"(?:session|conversation)[ _]?id:?\s+([0-9a-f\-]{16,})",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         var quelle = session.Success
             ? Path.Combine(CodexBilderOrdner, session.Groups[1].Value)
             : null;
         var bilder = quelle is not null && Directory.Exists(quelle)
-            ? Directory.EnumerateFiles(quelle)
-                .Where(f => f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(f => f)
-                .ToList()
+            ? Directory.EnumerateFiles(quelle).Where(IstBildDatei).OrderBy(f => f).ToList()
             : new List<string>();
+
+        // Fallback: liefert der Kopf keine Session-ID (mehr), nehmen wir alle Bilder,
+        // die seit dem Start dieses Aufrufs unter generated_images entstanden sind
+        if (bilder.Count == 0 && Directory.Exists(CodexBilderOrdner))
+        {
+            bilder = Directory
+                .EnumerateFiles(CodexBilderOrdner, "*", SearchOption.AllDirectories)
+                .Where(IstBildDatei)
+                .Where(f => File.GetLastWriteTimeUtc(f) >= startZeit)
+                .OrderBy(File.GetLastWriteTimeUtc)
+                .ToList();
+        }
 
         if (bilder.Count == 0)
         {
             var antwort = stdout.Trim();
             if (antwort.Length > 400) antwort = antwort[^400..];
             throw new InvalidOperationException(
-                $"Codex hat kein Bild erzeugt.\n\nAntwort:\n{antwort}");
+                $"Es wurde kein generiertes Bild gefunden (unter {CodexBilderOrdner}).\n\n" +
+                $"Codex-Antwort:\n{antwort}");
         }
 
         // In den Austauschordner kopieren (sprechende Namen statt ig_<hash>.png)
@@ -407,6 +419,11 @@ public class KiService
         }
         return ziele;
     }
+
+    static bool IstBildDatei(string f) =>
+        f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+        f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+        f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Argument für die Windows-Kommandozeile quoten (Backslash-Escaping für ").</summary>
     static string PsQuote(string s) =>

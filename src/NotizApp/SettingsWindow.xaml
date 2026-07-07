@@ -25,6 +25,21 @@
             <ComboBox x:Name="QuickNotebookBox" MinWidth="180" Margin="10,0,0,0"/>
         </StackPanel>
 
+        <Separator Margin="0,16"/>
+
+        <TextBlock Text="Eigene Notiz-Vorlagen" FontWeight="SemiBold"/>
+        <TextBlock Text="Erscheinen im Editor unter „📋 Vorlage“ und im Menü „Neue Notiz“ — z.B. Checklisten für Begehungen oder Notfall-Anrufe."
+                   FontSize="11" Opacity="0.6" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        <DockPanel Margin="0,8,0,0">
+            <StackPanel DockPanel.Dock="Right" Margin="8,0,0,0" MinWidth="100">
+                <Button Content="Neu…" Padding="0,4" Click="VorlageNeu_Click"/>
+                <Button Content="Bearbeiten…" Padding="0,4" Margin="0,6,0,0" Click="VorlageBearbeiten_Click"/>
+                <Button Content="Löschen" Padding="0,4" Margin="0,6,0,0" Click="VorlageLoeschen_Click"/>
+            </StackPanel>
+            <ListBox x:Name="VorlagenListe" Height="130"
+                     MouseDoubleClick="VorlageBearbeiten_Click"/>
+        </DockPanel>
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
             <Button Content="Abbrechen" MinWidth="90" Margin="0,0,8,0" IsCancel="True"/>
             <Button Content="Speichern" MinWidth="90" IsDefault="True" Click="Speichern_Click"/>

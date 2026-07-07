@@ -56,8 +56,24 @@
         </Grid>
 
         <!-- Titel + Text -->
-        <TextBox x:Name="TitelBox" Margin="0,12,0,0" Padding="4" FontSize="15"
-                 FontWeight="SemiBold" ToolTip="Titel (leer = automatisch)"/>
+        <Grid Margin="0,12,0,0">
+            <TextBox x:Name="TitelBox" Padding="4" FontSize="15"
+                     FontWeight="SemiBold" ToolTip="Titel (leer = automatisch)"/>
+            <TextBlock Text="Titel (leer = automatisch)" FontSize="15" Margin="7,0,0,0"
+                       Foreground="{DynamicResource AppTextLeiseBrush}" Opacity="0.55"
+                       IsHitTestVisible="False" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Text, ElementName=TitelBox}" Value="">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
         <TextBox x:Name="TextBox" Margin="0,8,0,0" Padding="4" MinHeight="110"
                  AcceptsReturn="True" TextWrapping="Wrap"
                  VerticalScrollBarVisibility="Auto" MaxHeight="240"/>

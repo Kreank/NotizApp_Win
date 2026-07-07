@@ -60,6 +60,8 @@ public partial class MainWindow : Window
         Editor.SpeichernAngefordert += SpeichereAktuelle;
         Editor.FokusUmgeschaltet += SetzeFokusModus;
         Editor.ChatAngefordert += () => SetzeChatSichtbar(!_chatOffen);
+        Editor.VorlagenVerwaltenAngefordert += () =>
+            Einstellungen_Click(this, new RoutedEventArgs());
 
         ChatPanel.Ki = Editor.Ki;
         ChatPanel.HoleNotizKontext = () => Editor.KiBody();
@@ -93,10 +95,14 @@ public partial class MainWindow : Window
             NotizbuchListe.Items.Clear();
             foreach (var nb in _store.Notizbuecher())
             {
-                var anzahl = _store.Notizen.Count(n => n.Notizbuch == nb);
+                // Anzahl inkl. Unterordner — der Klick auf den Ordner zeigt ja auch den Teilbaum
+                var anzahl = _store.Notizen.Count(n => NoteStore.ImTeilbaum(n.Notizbuch, nb));
                 var item = new ListBoxItem { Content = NotizbuchEintrag(nb, anzahl), Tag = nb };
 
                 var menu = new ContextMenu();
+                var unterordner = new MenuItem { Header = "Unterordner anlegen…" };
+                unterordner.Click += (_, _) => NeuerUnterordner(nb);
+                menu.Items.Add(unterordner);
                 var umbenennen = new MenuItem { Header = "Umbenennen…" };
                 umbenennen.Click += (_, _) => UmbenenneNotizbuch(nb);
                 menu.Items.Add(umbenennen);
@@ -176,26 +182,40 @@ public partial class MainWindow : Window
         AktualisiereListe();
     }
 
-    /// <summary>Sidebar-Eintrag: farbiger Punkt (wenn Farbe gesetzt) oder 📁 + Name + Anzahl.</summary>
+    /// <summary>Ordner-Silhouette (Mappe mit Reiter) für die Sidebar — einfärbbar,
+    /// im Gegensatz zum 📁-Farb-Emoji, das seine Farbe nicht ändern kann.</summary>
+    static readonly System.Windows.Media.Geometry OrdnerForm =
+        System.Windows.Media.Geometry.Parse(
+            "M0,2 A2,2 0 0 1 2,0 L5,0 L7,2 L13,2 A2,2 0 0 1 15,4 L15,10 A2,2 0 0 1 13,12 L2,12 A2,2 0 0 1 0,10 Z");
+
+    /// <summary>Sidebar-Eintrag: Ordnersymbol (in der Notizbuch-Farbe, falls gesetzt)
+    /// + Name + Anzahl. Unterordner ("Kunden/Meier") werden eingerückt und
+    /// zeigen nur ihren letzten Namensteil.</summary>
     static StackPanel NotizbuchEintrag(string nb, int anzahl)
     {
-        var stack = new StackPanel { Orientation = Orientation.Horizontal };
+        int tiefe = nb.Count(c => c == '/');
+        var anzeigeName = nb[(nb.LastIndexOf('/') + 1)..];
+
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(tiefe * 16, 0, 0, 0),
+        };
         if (NotizbuchFarben.BrushFuer(nb) is { } brush)
         {
-            stack.Children.Add(new System.Windows.Shapes.Ellipse
+            stack.Children.Add(new System.Windows.Shapes.Path
             {
-                Width = 10,
-                Height = 10,
-                Margin = new Thickness(2, 0, 8, 0),
-                VerticalAlignment = VerticalAlignment.Center,
+                Data = OrdnerForm,
                 Fill = brush,
+                Margin = new Thickness(1, 0, 7, 0),
+                VerticalAlignment = VerticalAlignment.Center,
             });
         }
         else
         {
             stack.Children.Add(new TextBlock { Text = "📁", Margin = new Thickness(0, 0, 6, 0) });
         }
-        stack.Children.Add(new TextBlock { Text = $"{nb}  ({anzahl})" });
+        stack.Children.Add(new TextBlock { Text = $"{anzeigeName}  ({anzahl})" });
         return stack;
     }
 
@@ -254,11 +274,21 @@ public partial class MainWindow : Window
         AktualisiereSidebar();
     }
 
+    void NeuerUnterordner(string eltern)
+    {
+        var name = TextPromptWindow.Frage(this, "Unterordner anlegen",
+            $"Name des Unterordners in „{eltern}“:");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        _store.NeuesNotizbuch(name, eltern);
+        AktualisiereSidebar();
+    }
+
     void UmbenenneNotizbuch(string nb)
     {
+        var alterName = nb[(nb.LastIndexOf('/') + 1)..];
         var neu = TextPromptWindow.Frage(this, "Notizbuch umbenennen",
-            $"Neuer Name für „{nb}“:", vorgabe: nb);
-        if (string.IsNullOrWhiteSpace(neu) || neu == nb) return;
+            $"Neuer Name für „{nb}“:", vorgabe: alterName);
+        if (string.IsNullOrWhiteSpace(neu) || neu == alterName) return;
 
         SpeichereAktuelle(); // offene Änderungen sichern, bevor Pfade wechseln
         var ergebnis = _store.NotizbuchUmbenennen(nb, neu);
@@ -268,14 +298,21 @@ public partial class MainWindow : Window
                 "Umbenennen", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        if (_filterNotizbuch == nb) _filterNotizbuch = ergebnis;
-        if (_settings.Aktuell.QuickNotebook == nb)
-            _settings.Aktuell.QuickNotebook = ergebnis;
-        if (_settings.Aktuell.NotizbuchFarben.Remove(nb, out var farbe))
+
+        // Filter, Schnellnotiz-Ziel und Farben im ganzen Teilbaum nachziehen
+        string Umziehen(string pfad) => ergebnis + pfad[nb.Length..];
+        if (_filterNotizbuch is not null && NoteStore.ImTeilbaum(_filterNotizbuch, nb))
+            _filterNotizbuch = Umziehen(_filterNotizbuch);
+        if (NoteStore.ImTeilbaum(_settings.Aktuell.QuickNotebook, nb))
+            _settings.Aktuell.QuickNotebook = Umziehen(_settings.Aktuell.QuickNotebook);
+        var farben = _settings.Aktuell.NotizbuchFarben;
+        foreach (var key in farben.Keys.Where(k => NoteStore.ImTeilbaum(k, nb)).ToList())
         {
-            _settings.Aktuell.NotizbuchFarben[ergebnis] = farbe;
-            NotizbuchFarben.Setze(_settings.Aktuell.NotizbuchFarben);
+            var farbe = farben[key];
+            farben.Remove(key);
+            farben[Umziehen(key)] = farbe;
         }
+        NotizbuchFarben.Setze(farben);
         _settings.Speichere();
         AktualisiereSidebar();
         AktualisiereListe();
@@ -283,15 +320,17 @@ public partial class MainWindow : Window
 
     void LoescheNotizbuch(string nb)
     {
-        var anzahl = _store.Notizen.Count(n => n.Notizbuch == nb);
+        var anzahl = _store.Notizen.Count(n => NoteStore.ImTeilbaum(n.Notizbuch, nb));
+        var hatUnterordner = _store.Notizbuecher()
+            .Any(x => x != nb && NoteStore.ImTeilbaum(x, nb));
         var antwort = MessageBox.Show(this,
-            anzahl == 0
+            anzahl == 0 && !hatUnterordner
                 ? $"Leeres Notizbuch „{nb}“ löschen?"
-                : $"Notizbuch „{nb}“ mit {anzahl} Notiz(en) endgültig löschen?\nDas kann nicht rückgängig gemacht werden.",
+                : $"Notizbuch „{nb}“ {(hatUnterordner ? "samt Unterordnern " : "")}mit {anzahl} Notiz(en) endgültig löschen?\nDas kann nicht rückgängig gemacht werden.",
             "Notizbuch löschen", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (antwort != MessageBoxResult.Yes) return;
 
-        if (_aktuelleNotiz?.Notizbuch == nb)
+        if (_aktuelleNotiz is not null && NoteStore.ImTeilbaum(_aktuelleNotiz.Notizbuch, nb))
         {
             _autosaveTimer.Stop();
             _aktuelleNotiz = null;
@@ -299,9 +338,13 @@ public partial class MainWindow : Window
             ZeigeEditorHinweis();
         }
         _store.NotizbuchLoeschen(nb);
-        if (_filterNotizbuch == nb) _filterNotizbuch = null;
-        if (_settings.Aktuell.NotizbuchFarben.Remove(nb))
+        if (_filterNotizbuch is not null && NoteStore.ImTeilbaum(_filterNotizbuch, nb))
+            _filterNotizbuch = null;
+        var geloescht = _settings.Aktuell.NotizbuchFarben.Keys
+            .Where(k => NoteStore.ImTeilbaum(k, nb)).ToList();
+        if (geloescht.Count > 0)
         {
+            foreach (var k in geloescht) _settings.Aktuell.NotizbuchFarben.Remove(k);
             _settings.Speichere();
             NotizbuchFarben.Setze(_settings.Aktuell.NotizbuchFarben);
         }
@@ -338,8 +381,8 @@ public partial class MainWindow : Window
             AufgabenListe.Visibility = Visibility.Collapsed;
 
             IEnumerable<Note> menge = _store.Notizen;
-            if (_filterNotizbuch is not null)
-                menge = menge.Where(n => n.Notizbuch == _filterNotizbuch);
+            if (_filterNotizbuch is not null) // inkl. Unterordner
+                menge = menge.Where(n => NoteStore.ImTeilbaum(n.Notizbuch, _filterNotizbuch));
             if (_filterTag is not null)
                 menge = menge.Where(n => n.Meta.Tags.Contains(_filterTag, StringComparer.OrdinalIgnoreCase));
 
@@ -395,7 +438,14 @@ public partial class MainWindow : Window
         VerschiebenMenu.Items.Clear();
         foreach (var nb in _store.Notizbuecher())
         {
-            var item = new MenuItem { Header = nb, IsEnabled = nb != note.Notizbuch };
+            // Voller Pfad, Unterordner eingerückt — im flachen Menü sonst nicht zu unterscheiden
+            int tiefe = nb.Count(c => c == '/');
+            var item = new MenuItem
+            {
+                Header = new string(' ', tiefe * 3) + (tiefe > 0 ? "↳ " : "") + nb[(nb.LastIndexOf('/') + 1)..],
+                IsEnabled = nb != note.Notizbuch,
+                ToolTip = nb,
+            };
             item.Click += (_, _) =>
             {
                 _store.Verschiebe(note, nb);
@@ -507,6 +557,7 @@ public partial class MainWindow : Window
     void NeueNotiz_Click(object sender, RoutedEventArgs e)
     {
         // Linksklick öffnet das Vorlagen-Menü unter dem Button
+        BaueNeueNotizMenu(); // eigene Vorlagen können sich geändert haben
         var menu = NeueNotizButton.ContextMenu!;
         menu.PlacementTarget = NeueNotizButton;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
@@ -612,7 +663,6 @@ public partial class MainWindow : Window
     // ---------- KI-Chat ----------
 
     bool _chatOffen;
-    GridLength _chatBreite = new(380);
 
     void SetzeChatSichtbar(bool an)
     {
@@ -621,11 +671,12 @@ public partial class MainWindow : Window
         if (an)
         {
             ChatSpalte.MinWidth = 300;
-            ChatSpalte.Width = _chatBreite;
+            ChatSpalte.Width = new GridLength(Math.Max(300, _settings.Aktuell.ChatBreite));
         }
         else
         {
-            if (ChatSpalte.Width.Value > 0) _chatBreite = ChatSpalte.Width;
+            if (ChatSpalte.Width.Value > 0)
+                _settings.Aktuell.ChatBreite = ChatSpalte.Width.Value;
             ChatSpalte.MinWidth = 0;
             ChatSpalte.Width = new GridLength(0);
         }
@@ -696,6 +747,13 @@ public partial class MainWindow : Window
     void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         SpeichereAktuelle();
+        // Gezogene Chat-Breite über App-Neustarts merken
+        if (_chatOffen && ChatSpalte.Width.Value > 0 &&
+            Math.Abs(_settings.Aktuell.ChatBreite - ChatSpalte.Width.Value) > 1)
+        {
+            _settings.Aktuell.ChatBreite = ChatSpalte.Width.Value;
+            _settings.Speichere();
+        }
         if (!WirklichSchliessen)
         {
             // Tray-App: Schließen versteckt nur, Beenden über das Tray-Menü

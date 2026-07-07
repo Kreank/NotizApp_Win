@@ -83,12 +83,22 @@ public class NoteStore
 
     // ---------- Laden ----------
 
+    /// <summary>Alle Notizbücher als relative Pfade ("Kunden", "Kunden/Meier"),
+    /// in Baumreihenfolge: Eltern direkt vor ihren Unterordnern.</summary>
     public IEnumerable<string> Notizbuecher()
     {
-        if (!Directory.Exists(DataFolder)) yield break;
-        foreach (var d in Directory.EnumerateDirectories(DataFolder).OrderBy(x => x))
-            yield return Path.GetFileName(d);
+        if (!Directory.Exists(DataFolder)) return Enumerable.Empty<string>();
+        return Directory.EnumerateDirectories(DataFolder, "*", SearchOption.AllDirectories)
+            .Select(d => Path.GetRelativePath(DataFolder, d).Replace('\\', '/'))
+            // '/' niedriger einsortieren als jedes Namenszeichen, sonst rutschen
+            // Unterordner hinter Geschwister wie "Kunden-Anrufe"
+            .OrderBy(rel => rel.Replace('/', '\u0001'), StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>Liegt das Notizbuch im Teilbaum unter wurzel (oder ist es die Wurzel selbst)?</summary>
+    public static bool ImTeilbaum(string notizbuch, string wurzel) =>
+        notizbuch.Equals(wurzel, StringComparison.OrdinalIgnoreCase) ||
+        notizbuch.StartsWith(wurzel + "/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Alle .md-Dateien parsen (Tinte lazy). In-Memory-Index für Suche und Aufgaben.</summary>
     public void LadeAlle()
@@ -222,8 +232,9 @@ public class NoteStore
             Notizbuch = notizbuch,
             Pfad = NeuerPfad(notizbuch, v.Key),
             Meta = new NoteMeta { Titel = v.TitelVorschlag, Typ = v.Key },
-            Elemente = { new TextElement { X = 0, Y = 8, Breite = 620, Text = v.Body } },
         };
+        // Markdown-Tabellen in der Vorlage werden echte Tabellen-Elemente
+        note.Elemente.AddRange(Frontmatter.ElementeAusVorlage(v.Body));
         Speichere(note);
         return note;
     }
@@ -297,11 +308,13 @@ public class NoteStore
         note.MeldeAnzeigeGeaendert();
     }
 
-    public string NeuesNotizbuch(string name)
+    /// <summary>Notizbuch anlegen — mit uebergeordnet als Unterordner (z.B. "Kunden" → "Kunden/Meier").</summary>
+    public string NeuesNotizbuch(string name, string? uebergeordnet = null)
     {
         name = BereinigeOrdnerName(name);
-        Directory.CreateDirectory(Path.Combine(DataFolder, name));
-        return name;
+        var rel = uebergeordnet is null ? name : $"{uebergeordnet}/{name}";
+        Directory.CreateDirectory(Path.Combine(DataFolder, rel));
+        return rel;
     }
 
     static string BereinigeOrdnerName(string name)
@@ -312,32 +325,35 @@ public class NoteStore
         return name.Length == 0 ? "Neues Notizbuch" : name;
     }
 
-    /// <summary>Notizbuch-Ordner umbenennen; passt Pfade der geladenen Notizen an.
-    /// Liefert den neuen Namen oder null, wenn das Ziel schon existiert.</summary>
-    public string? NotizbuchUmbenennen(string alt, string neu)
+    /// <summary>Notizbuch-Ordner umbenennen (nur der letzte Namensteil, der
+    /// Ober-Ordner bleibt); passt Pfade der geladenen Notizen im ganzen Teilbaum an.
+    /// Liefert den neuen relativen Pfad oder null, wenn das Ziel schon existiert.</summary>
+    public string? NotizbuchUmbenennen(string alt, string neuName)
     {
-        neu = BereinigeOrdnerName(neu);
+        neuName = BereinigeOrdnerName(neuName);
+        var eltern = alt.Contains('/') ? alt[..alt.LastIndexOf('/')] : null;
+        var neu = eltern is null ? neuName : $"{eltern}/{neuName}";
         if (neu.Equals(alt, StringComparison.OrdinalIgnoreCase)) return neu;
         var altPfad = Path.Combine(DataFolder, alt);
         var neuPfad = Path.Combine(DataFolder, neu);
         if (!Directory.Exists(altPfad) || Directory.Exists(neuPfad)) return null;
 
         Directory.Move(altPfad, neuPfad);
-        foreach (var note in Notizen.Where(n => n.Notizbuch == alt))
+        foreach (var note in Notizen.Where(n => ImTeilbaum(n.Notizbuch, alt)))
         {
-            note.Notizbuch = neu;
-            note.Pfad = Path.Combine(neuPfad, Path.GetFileName(note.Pfad));
+            note.Notizbuch = neu + note.Notizbuch[alt.Length..];
+            note.Pfad = Path.Combine(DataFolder, note.Notizbuch, Path.GetFileName(note.Pfad));
             note.MeldeAnzeigeGeaendert();
         }
         return neu;
     }
 
-    /// <summary>Notizbuch samt aller Notizen und Sidecars löschen.</summary>
+    /// <summary>Notizbuch samt aller Notizen, Sidecars und Unterordner löschen.</summary>
     public void NotizbuchLoeschen(string name)
     {
         var pfad = Path.Combine(DataFolder, name);
         try { Directory.Delete(pfad, recursive: true); } catch { }
-        Notizen.RemoveAll(n => n.Notizbuch == name);
+        Notizen.RemoveAll(n => ImTeilbaum(n.Notizbuch, name));
     }
 
     /// <summary>Alle in Notizen verwendeten Tags mit Häufigkeit.</summary>

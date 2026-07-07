@@ -61,6 +61,15 @@ public class DateiElement : NoteElement
 {
     public string Datei { get; set; } = "";
     public double Hoehe { get; set; } = 96;
+    /// <summary>Zuletzt angezeigte PDF-Seite (0-basiert), bleibt beim Blättern erhalten.</summary>
+    public int Seite { get; set; }
+}
+
+/// <summary>Tabelle auf der Fläche: Zeilen mit Textzellen, erste Zeile ist die
+/// Kopfzeile. In der .md-Datei als Markdown-Tabelle gespeichert.</summary>
+public class TabelleElement : NoteElement
+{
+    public List<List<string>> Zeilen { get; set; } = new();
 }
 
 /// <summary>Alte Tinten-Sidecar-Datei (Blockformat vor dem Freiform-Canvas) samt
@@ -180,6 +189,11 @@ public class Note : INotifyPropertyChanged
             sb.AppendLine($"{Meta.Kunde.Name} {Meta.Kunde.Telefon} {Meta.Kunde.Adresse}");
         foreach (var t in TexteInLeserichtung())
             sb.AppendLine(t.Text);
+        foreach (var tab in Elemente.OfType<TabelleElement>())
+        {
+            foreach (var zeile in tab.Zeilen)
+                sb.AppendLine(string.Join(' ', zeile));
+        }
         foreach (var d in Elemente.OfType<DateiElement>())
             sb.AppendLine(d.Datei);
         sb.AppendLine(TintenText);

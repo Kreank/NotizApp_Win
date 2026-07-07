@@ -66,6 +66,7 @@ public partial class App : Application
         _store = new NoteStore(_settings.Aktuell.DataFolder);
         _store.Initialisieren();
         _store.LadeAlle();
+        Templates.LadeEigene(_settings.Aktuell.DataFolder);
         _erkennung = new InkRecognitionService();
 
         // ---- Tray ----

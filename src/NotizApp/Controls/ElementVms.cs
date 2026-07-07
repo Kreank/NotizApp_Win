@@ -233,11 +233,12 @@ public class DateiElementVm : ElementVm
         ".xlsx" or ".xls" or ".csv" => "📊",
         ".docx" or ".doc" => "📝",
         ".md" or ".txt" => "📄",
+        ".wav" or ".mp3" or ".m4a" => "🎵",
         _ => "📎",
     };
 
     ImageSource? _vorschau;
-    /// <summary>Erste PDF-Seite als Vorschaubild (null = nur Icon-Karte).</summary>
+    /// <summary>Aktuelle PDF-Seite als Vorschaubild (null = nur Icon-Karte).</summary>
     public ImageSource? Vorschau
     {
         get => _vorschau;
@@ -245,6 +246,13 @@ public class DateiElementVm : ElementVm
     }
 
     public bool HatVorschau => _vorschau is not null;
+
+    /// <summary>Angezeigte PDF-Seite (0-basiert), wird mit der Notiz gespeichert.</summary>
+    public int Seite { get; private set; }
+
+    int _seitenAnzahl;
+    public bool MehrereSeiten => _seitenAnzahl > 1;
+    public string SeitenInfo => $"{Seite + 1} / {_seitenAnzahl}";
 
     public override double Unterkante => Y + Hoehe;
 
@@ -254,12 +262,27 @@ public class DateiElementVm : ElementVm
         X = el.X; Y = el.Y; Breite = el.Breite;
         Datei = el.Datei;
         _hoehe = Math.Max(MinHoehe, el.Hoehe);
+        Seite = Math.Max(0, el.Seite);
         OnChanged(nameof(Name));
         OnChanged(nameof(Icon));
     }
 
-    /// <summary>PDF: erste Seite als Vorschau rendern (Windows.Data.Pdf). Scheitert leise.</summary>
-    public async Task LadeVorschauAsync(string ordner, bool erstBemessen = false)
+    /// <summary>PDF: gemerkte Seite als Vorschau rendern (Windows.Data.Pdf). Scheitert leise.</summary>
+    public Task LadeVorschauAsync(string ordner, bool erstBemessen = false) =>
+        RendereSeiteAsync(ordner, erstBemessen);
+
+    /// <summary>Auf der PDF-Karte blättern (delta ±1); die Seite wird mitgespeichert.</summary>
+    public async Task BlaettereAsync(string ordner, int delta)
+    {
+        var ziel = Math.Clamp(Seite + delta, 0, Math.Max(0, _seitenAnzahl - 1));
+        if (ziel == Seite || !HatVorschau) return;
+        Seite = ziel;
+        OnChanged(nameof(SeitenInfo));
+        await RendereSeiteAsync(ordner);
+        MeldeGeaendert();
+    }
+
+    async Task RendereSeiteAsync(string ordner, bool erstBemessen = false)
     {
         if (!Datei.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) return;
         try
@@ -269,7 +292,9 @@ public class DateiElementVm : ElementVm
             var sf = await Windows.Storage.StorageFile.GetFileFromPathAsync(pfad);
             var doc = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(sf);
             if (doc.PageCount == 0) return;
-            using var seite = doc.GetPage(0);
+            _seitenAnzahl = (int)doc.PageCount;
+            Seite = Math.Clamp(Seite, 0, _seitenAnzahl - 1);
+            using var seite = doc.GetPage((uint)Seite);
             using var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
             await seite.RenderToStreamAsync(stream,
                 new Windows.Data.Pdf.PdfPageRenderOptions { DestinationWidth = 900 });
@@ -281,6 +306,8 @@ public class DateiElementVm : ElementVm
             bmp.EndInit();
             bmp.Freeze();
             Vorschau = bmp;
+            OnChanged(nameof(MehrereSeiten));
+            OnChanged(nameof(SeitenInfo));
             if (erstBemessen && seite.Size.Width > 0)
             {
                 Breite = 380;
@@ -295,7 +322,184 @@ public class DateiElementVm : ElementVm
 
     public override NoteElement ZuModel()
     {
-        var el = new DateiElement { Datei = Datei, Hoehe = Hoehe };
+        var el = new DateiElement { Datei = Datei, Hoehe = Hoehe, Seite = Seite };
+        UebernehmePosition(el);
+        return el;
+    }
+}
+
+/// <summary>Eine Zelle der Tabelle: editierbarer Text — oder ein Bild, wenn der
+/// Text Markdown-Bildsyntax ist ("![](datei.png)", Datei liegt neben der Notiz).</summary>
+public class ZelleVm : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+    internal Action? Geaendert;
+    internal Func<string, ImageSource?>? BildLader;
+
+    string _text = "";
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            if (_text == value) return;
+            _text = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text)));
+            MeldeBildNeu();
+            Geaendert?.Invoke();
+        }
+    }
+
+    public bool HatBild => BildDatei is not null;
+    public ImageSource? BildQuelle =>
+        BildDatei is { } datei ? BildLader?.Invoke(datei) : null;
+
+    string? BildDatei
+    {
+        get
+        {
+            var t = _text.Trim();
+            if (!t.StartsWith("![") || !t.EndsWith(")")) return null;
+            int klammer = t.IndexOf("](", StringComparison.Ordinal);
+            return klammer < 0 ? null : t[(klammer + 2)..^1].Trim();
+        }
+    }
+
+    internal void MeldeBildNeu()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HatBild)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BildQuelle)));
+    }
+}
+
+/// <summary>Eine Tabellenzeile (nur Container für die Zellen).</summary>
+public class TabellenZeileVm
+{
+    public System.Collections.ObjectModel.ObservableCollection<ZelleVm> Zellen { get; } = new();
+}
+
+/// <summary>Tabelle auf der Fläche: verschieb- und breitenverstellbar, Zellen
+/// direkt editierbar, erste Zeile ist die Kopfzeile.</summary>
+public class TabelleElementVm : ElementVm
+{
+    public System.Collections.ObjectModel.ObservableCollection<TabellenZeileVm> Zeilen { get; } = new();
+
+    /// <summary>Tatsächlich gerenderte Höhe (setzt der Editor nach dem Layout).</summary>
+    public double AnzeigeHoehe { get; set; } = 90;
+
+    public override double Unterkante => Y + AnzeigeHoehe;
+
+    int SpaltenAnzahl => Zeilen.FirstOrDefault()?.Zellen.Count ?? 0;
+
+    public TabelleElementVm() { }
+    public TabelleElementVm(TabelleElement el)
+    {
+        X = el.X; Y = el.Y; Breite = el.Breite;
+        foreach (var zeile in el.Zeilen)
+            FuegeZeileHinzu(zeile);
+    }
+
+    string? _ordner;
+
+    /// <summary>Notizordner setzen — nötig, damit Zellen-Bilder geladen werden können.</summary>
+    public void SetzeOrdner(string ordner)
+    {
+        _ordner = ordner;
+        foreach (var zeile in Zeilen)
+        {
+            foreach (var zelle in zeile.Zellen) zelle.MeldeBildNeu();
+        }
+    }
+
+    ImageSource? LadeZellBild(string datei)
+    {
+        if (_ordner is null) return null;
+        try
+        {
+            var pfad = System.IO.Path.Combine(_ordner, datei);
+            if (!System.IO.File.Exists(pfad)) return null;
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 400; // Zellen-Thumbnail — spart Speicher
+            bmp.UriSource = new Uri(pfad);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    ZelleVm NeueZelle(string text = "") =>
+        new() { Text = text, Geaendert = MeldeGeaendert, BildLader = LadeZellBild };
+
+    public void FuegeZeileHinzu(IEnumerable<string>? werte = null)
+    {
+        var zeile = new TabellenZeileVm();
+        if (werte is not null)
+        {
+            foreach (var w in werte) zeile.Zellen.Add(NeueZelle(w));
+        }
+        while (zeile.Zellen.Count < Math.Max(1, SpaltenAnzahl))
+            zeile.Zellen.Add(NeueZelle());
+        Zeilen.Add(zeile);
+        MeldeGeaendert();
+    }
+
+    public void FuegeSpalteHinzu()
+    {
+        foreach (var zeile in Zeilen) zeile.Zellen.Add(NeueZelle());
+        MeldeGeaendert();
+    }
+
+    public void EntferneLetzteZeile()
+    {
+        if (Zeilen.Count <= 1) return;
+        Zeilen.RemoveAt(Zeilen.Count - 1);
+        MeldeGeaendert();
+    }
+
+    public void EntferneLetzteSpalte()
+    {
+        if (SpaltenAnzahl <= 1) return;
+        foreach (var zeile in Zeilen)
+            zeile.Zellen.RemoveAt(zeile.Zellen.Count - 1);
+        MeldeGeaendert();
+    }
+
+    /// <summary>Kopf + n leere Zeilen (für den Tabelle-einfügen-Button).</summary>
+    public void FuelleStandard(int zeilen, int spalten)
+    {
+        for (int z = 0; z < zeilen; z++)
+            FuegeZeileHinzu(Enumerable.Repeat("", spalten));
+    }
+
+    /// <summary>Inhalt als Markdown-Tabelle (für KI-Kontext).</summary>
+    public string AlsMarkdown()
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int z = 0; z < Zeilen.Count; z++)
+        {
+            sb.AppendLine("| " + string.Join(" | ",
+                Zeilen[z].Zellen.Select(c => c.Text.Replace("\n", " "))) + " |");
+            if (z == 0)
+                sb.AppendLine("|" + string.Concat(
+                    Enumerable.Repeat(" --- |", Zeilen[z].Zellen.Count)));
+        }
+        return sb.ToString().TrimEnd('\n');
+    }
+
+    public bool IstLeer => Zeilen.All(z => z.Zellen.All(c => c.Text.Trim().Length == 0));
+
+    public override NoteElement ZuModel()
+    {
+        var el = new TabelleElement
+        {
+            Zeilen = Zeilen.Select(z => z.Zellen.Select(c => c.Text).ToList()).ToList(),
+        };
         UebernehmePosition(el);
         return el;
     }

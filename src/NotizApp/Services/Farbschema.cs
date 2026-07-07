@@ -48,6 +48,10 @@ public static class Farbschema
         // Treibende Licht-Schimmer im Fenster-Hintergrund
         Glow(ziel, "AppGlowWasserBrush", dunkel ? "#2FA9C4" : "#0E7490", dunkel ? 0.16 : 0.11);
         Glow(ziel, "AppGlowKupferBrush", dunkel ? "#D98A54" : "#C67A44", dunkel ? 0.13 : 0.09);
+
+        // Firmen-Artwork hinter allem: im Dunkeln verschmilzt das Navy mit dem
+        // Fond (etwas präsenter ok), im Hellen nur ein Hauch, sonst wirkt es trüb
+        ziel["AppFondBildOpazitaet"] = dunkel ? 0.12 : 0.05;
     }
 
     static void Brush(ResourceDictionary ziel, string key, string hex)

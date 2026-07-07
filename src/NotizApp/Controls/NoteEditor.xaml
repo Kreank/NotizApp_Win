@@ -8,6 +8,9 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding" Value="0"/>
+            <!-- Design-Farben statt WPF-Standard-Schwarz (im Dark Mode sonst unlesbar) -->
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource AppTextBrush}"/>
         </Style>
         <Style x:Key="WerkzeugToggle" TargetType="ToggleButton">
             <Setter Property="Margin" Value="2,0"/>
@@ -99,6 +102,114 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- ===== Tabellen-Element ===== -->
+        <DataTemplate DataType="{x:Type local:TabelleElementVm}">
+            <Grid Background="Transparent" Width="{Binding Breite}">
+                <Border x:Name="Rahmen" BorderThickness="1" CornerRadius="4"
+                        BorderBrush="{DynamicResource AppRandBrush}"
+                        Background="{DynamicResource AppFlaecheBrush}"
+                        SizeChanged="Tabelle_SizeChanged">
+                    <ItemsControl ItemsSource="{Binding Zeilen}" AlternationCount="9999">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="ZeilenRahmen">
+                                    <ItemsControl ItemsSource="{Binding Zellen}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Rows="1"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderThickness="0,0,1,1"
+                                                        BorderBrush="{DynamicResource AppRandBrush}">
+                                                    <Grid>
+                                                        <TextBox x:Name="ZellBox"
+                                                                 Style="{StaticResource RahmenlosTextBox}"
+                                                                 Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 AcceptsReturn="True" AcceptsTab="False"
+                                                                 TextWrapping="Wrap" FontSize="13"
+                                                                 Padding="6,4" MinHeight="27"
+                                                                 SpellCheck.IsEnabled="False"
+                                                                 PreviewKeyDown="TabellenZelle_KeyDown">
+                                                            <TextBox.ContextMenu>
+                                                                <ContextMenu>
+                                                                    <MenuItem Header="🖼 Bild in Zelle…"
+                                                                              Click="TabellenZellBild_Click"/>
+                                                                    <MenuItem Header="Bild entfernen"
+                                                                              Click="TabellenZellBildWeg_Click"/>
+                                                                </ContextMenu>
+                                                            </TextBox.ContextMenu>
+                                                        </TextBox>
+                                                        <Image x:Name="ZellBild" Visibility="Collapsed"
+                                                               Source="{Binding BildQuelle}" Stretch="Uniform"
+                                                               MaxHeight="110" Margin="4"
+                                                               HorizontalAlignment="Center"
+                                                               IsHitTestVisible="False"/>
+                                                    </Grid>
+                                                </Border>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding HatBild}" Value="True">
+                                                        <Setter TargetName="ZellBild" Property="Visibility" Value="Visible"/>
+                                                        <Setter TargetName="ZellBox" Property="Foreground" Value="Transparent"/>
+                                                        <Setter TargetName="ZellBox" Property="MinHeight" Value="60"/>
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <!-- Erste Zeile = Kopfzeile: halbfett auf tieferem Grund -->
+                                    <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex),
+                                            RelativeSource={RelativeSource TemplatedParent}}" Value="0">
+                                        <Setter TargetName="ZeilenRahmen" Property="Background"
+                                                Value="{DynamicResource AppFlaecheTiefBrush}"/>
+                                        <Setter TargetName="ZeilenRahmen" Property="TextElement.FontWeight"
+                                                Value="SemiBold"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <!-- Griffleiste (beim Drüberfahren): verschieben, Zeilen/Spalten, löschen -->
+                <StackPanel x:Name="Griff" Orientation="Horizontal" Opacity="0"
+                            HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Margin="0,-19,0,0">
+                    <StackPanel.Resources>
+                        <Style TargetType="Button" BasedOn="{StaticResource LoeschKnopf}">
+                            <Setter Property="ToolTip" Value="{x:Null}"/>
+                            <Setter Property="FontSize" Value="11"/>
+                        </Style>
+                    </StackPanel.Resources>
+                    <Thumb Width="36" Height="16" Cursor="SizeAll"
+                           Template="{StaticResource GriffTemplate}"
+                           ToolTip="Verschieben"
+                           DragDelta="ElementVerschieben_DragDelta"/>
+                    <Button Content="＋Zeile" ToolTip="Zeile unten anfügen" Click="TabelleZeile_Click"/>
+                    <Button Content="＋Spalte" ToolTip="Spalte rechts anfügen" Click="TabelleSpalte_Click"/>
+                    <Button Content="−Zeile" ToolTip="Letzte Zeile entfernen" Click="TabelleZeileWeg_Click"/>
+                    <Button Content="−Spalte" ToolTip="Letzte Spalte entfernen" Click="TabelleSpalteWeg_Click"/>
+                    <Button Content="🗑" ToolTip="Tabelle löschen" Click="ElementLoeschen_Click"/>
+                </StackPanel>
+                <Thumb x:Name="BreiteGriff" Width="7" Opacity="0" Cursor="SizeWE"
+                       HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                       Margin="0,4" ToolTip="Breite ziehen"
+                       Template="{StaticResource LeiseGriffTemplate}"
+                       DragDelta="TabelleBreite_DragDelta"/>
+            </Grid>
+            <DataTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Griff" Property="Opacity" Value="1"/>
+                    <Setter TargetName="BreiteGriff" Property="Opacity" Value="0.7"/>
+                    <Setter TargetName="Rahmen" Property="BorderBrush"
+                            Value="{DynamicResource AppAkzentBrush}"/>
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- ===== Bild-Element ===== -->
         <DataTemplate DataType="{x:Type local:BildElementVm}">
             <Grid Width="{Binding Breite}" Height="{Binding Hoehe}" Background="Transparent">
@@ -167,6 +278,27 @@
                         Style="{StaticResource LoeschKnopf}"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
                         Click="ElementLoeschen_Click"/>
+                <!-- PDF-Seiten blättern (nur bei mehrseitigen PDFs, beim Drüberfahren) -->
+                <Border x:Name="SeitenNav" CornerRadius="11" Opacity="0" Padding="4,1"
+                        Background="#B0202020" IsHitTestVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                        Margin="0,0,0,26">
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel.Resources>
+                            <Style TargetType="Button">
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="Padding" Value="7,0"/>
+                                <Setter Property="FontSize" Value="14"/>
+                            </Style>
+                        </StackPanel.Resources>
+                        <Button Content="‹" ToolTip="Vorherige Seite" Click="PdfSeiteZurueck_Click"/>
+                        <TextBlock Text="{Binding SeitenInfo}" Foreground="White" FontSize="11"
+                                   VerticalAlignment="Center" Margin="2,0"/>
+                        <Button Content="›" ToolTip="Nächste Seite" Click="PdfSeiteVor_Click"/>
+                    </StackPanel>
+                </Border>
                 <Thumb x:Name="EckGriff" Width="14" Height="14" Opacity="0"
                        Cursor="SizeNWSE" ToolTip="Größe ziehen"
                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
@@ -182,6 +314,15 @@
                     <Setter TargetName="VorschauKarte" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="IconKarte" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding MehrereSeiten}" Value="True"/>
+                        <Condition Binding="{Binding IsMouseOver,
+                            RelativeSource={RelativeSource AncestorType=Grid}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="SeitenNav" Property="Opacity" Value="1"/>
+                    <Setter TargetName="SeitenNav" Property="IsHitTestVisible" Value="True"/>
+                </MultiDataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </UserControl.Resources>
@@ -195,11 +336,32 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Titel -->
-        <TextBox x:Name="TitelBox" Grid.Row="0" Margin="16,12,16,0"
-                 Style="{StaticResource RahmenlosTextBox}"
-                 FontSize="24" FontWeight="SemiBold"
-                 TextChanged="Meta_TextChanged"/>
+        <!-- Titel (mit Platzhalter, solange leer) -->
+        <Grid Grid.Row="0" Margin="16,12,16,0">
+            <TextBlock Text="Titel eingeben…" FontSize="24" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppTextLeiseBrush}" Opacity="0.55"
+                       IsHitTestVisible="False" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding Text, ElementName=TitelBox}" Value=""/>
+                                    <Condition Binding="{Binding IsEnabled, ElementName=Wurzel}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <TextBox x:Name="TitelBox"
+                     Style="{StaticResource RahmenlosTextBox}"
+                     FontSize="24" FontWeight="SemiBold"
+                     ToolTip="Titel der Notiz"
+                     TextChanged="Meta_TextChanged"/>
+        </Grid>
 
         <!-- Tags -->
         <DockPanel Grid.Row="1" Margin="16,4,16,0">
@@ -278,10 +440,11 @@
 
                 <ToggleButton x:Name="AuswahlToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="➤" IsChecked="True"
-                              ToolTip="Auswählen/Tippen: Text bearbeiten, Objekte verschieben und skalieren. Doppelklick auf die Fläche = neues Textfeld."
+                              ToolTip="Auswählen/Tippen: Text bearbeiten, Objekte verschieben und skalieren. Mausklick auf die freie Fläche = Textfeld zum Lostippen (mit dem Stift: Doppeltipp)."
                               Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="StiftToggle" Style="{StaticResource WerkzeugToggle}"
-                              Content="🖊" ToolTip="Stift" Checked="Werkzeug_Checked"/>
+                              Content="🖊" Checked="Werkzeug_Checked"
+                              ToolTip="Stift. Mit Digitizer-Stift gilt: Der Stift zeichnet, die Maus tippt und bearbeitet Text — ohne Werkzeugwechsel."/>
                 <ToggleButton x:Name="MarkerToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="🖍" ToolTip="Textmarker" Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="RadiererToggle" Style="{StaticResource WerkzeugToggle}"
@@ -291,6 +454,9 @@
                               Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="LassoToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="⬚" ToolTip="Lasso-Auswahl" Checked="Werkzeug_Checked"/>
+                <ToggleButton x:Name="FormToggle" Style="{StaticResource WerkzeugToggle}"
+                              Content="▭" Checked="Werkzeug_Checked" Click="FormToggle_Click"
+                              ToolTip="Formen: Rechteck, Quadrat, Ellipse, Kreis, Dreieck, Linien (auch gestrichelt/gepunktet). Form wählen, dann auf der Fläche aufziehen — gezeichnet wird in der Stiftfarbe."/>
                 <Button x:Name="UmwandelnButton" Style="{StaticResource WerkzeugButton}"
                         Content="⬚→A" IsEnabled="False"
                         ToolTip="Markierte Handschrift in Tipptext umwandeln (übernimmt die Stiftfarbe)"
@@ -367,9 +533,21 @@
                         ToolTip="Papier wechseln: Blanko → Liniert → Kariert → Punktraster"
                         Click="Muster_Click"/>
 
+                <Button x:Name="VorlageButton" Style="{StaticResource WerkzeugButton}" Content="📋 Vorlage"
+                        ToolTip="Vorlage in die Notiz einfügen (Anruf, Meeting, Begehung, eigene Vorlagen …)"
+                        Click="Vorlage_Click"/>
+
+                <Button Style="{StaticResource WerkzeugButton}" Content="⊞ Tabelle"
+                        ToolTip="Tabelle einfügen (3 Spalten, Kopfzeile + 2 Zeilen) — Zeilen/Spalten über die Griffleiste der Tabelle"
+                        Click="TabelleEinfuegen_Click"/>
+
                 <Button Style="{StaticResource WerkzeugButton}" Content="📎 + Datei"
                         ToolTip="Bild oder Datei als Objekt ablegen (png, jpg, pdf, xlsx, docx, md, txt) — verschiebbar, skalierbar, Draufzeichnen inklusive"
                         Click="DateiEinfuegen_Click"/>
+
+                <Button x:Name="AufnahmeButton" Style="{StaticResource WerkzeugButton}" Content="🎙"
+                        ToolTip="Gespräch aufnehmen (Mikrofon + PC-Ton) und lokal in Text umwandeln — Klick startet, erneuter Klick stoppt. Wichtig: Gesprächspartner vorher um Einwilligung bitten (§ 201 StGB)."
+                        Click="Aufnahme_Click"/>
 
                 <Button Style="{StaticResource WerkzeugButton}" Content="💬 Chat"
                         ToolTip="KI-Chat ein-/ausblenden: recherchieren, Dateien erstellen, Ergebnisse in die Notiz übernehmen"
@@ -404,6 +582,8 @@
             <InkCanvas x:Name="Flaeche" Background="Transparent" MinHeight="500"
                        AllowDrop="True" Drop="Flaeche_Drop"
                        PreviewMouseLeftButtonDown="Flaeche_MouseLeftButtonDown"
+                       PreviewMouseMove="Flaeche_MouseMove"
+                       PreviewMouseLeftButtonUp="Flaeche_MouseUp"
                        SelectionChanged="Flaeche_SelectionChanged"/>
         </ScrollViewer>
     </Grid>

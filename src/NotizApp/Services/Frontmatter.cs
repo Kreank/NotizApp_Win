@@ -141,14 +141,22 @@ public static partial class Frontmatter
 
         var zeilen = body.Split('\n');
         TextElement? offenerText = null;
+        TabelleElement? offeneTabelle = null;
         var textZeilen = new StringBuilder();
 
         void SchliesseText()
         {
-            if (offenerText is null) return;
-            offenerText.Text = textZeilen.ToString().Trim('\n');
-            textZeilen.Clear();
-            offenerText = null;
+            if (offenerText is not null)
+            {
+                offenerText.Text = textZeilen.ToString().Trim('\n');
+                textZeilen.Clear();
+                offenerText = null;
+            }
+            if (offeneTabelle is not null)
+            {
+                NormalisiereTabelle(offeneTabelle);
+                offeneTabelle = null;
+            }
         }
 
         for (int i = 0; i < zeilen.Length; i++)
@@ -211,7 +219,9 @@ public static partial class Frontmatter
                     {
                         Datei = attrs.GetValueOrDefault("datei", ""),
                         Hoehe = Zahl("h", 96),
+                        Seite = (int)Zahl("seite", 0),
                     },
+                    "tabelle" => new TabelleElement(),
                     _ => null,
                 };
                 if (el is null) continue;
@@ -220,6 +230,17 @@ public static partial class Frontmatter
                 el.Breite = Zahl("b", 620);
                 note.Elemente.Add(el);
                 if (el is TextElement te) offenerText = te;
+                if (el is TabelleElement tab) offeneTabelle = tab;
+                continue;
+            }
+
+            if (offeneTabelle is not null)
+            {
+                // Markdown-Tabellenzeilen einsammeln; alles andere beendet die Tabelle
+                if (zeile.TrimStart().StartsWith('|'))
+                    offeneTabelle.Zeilen.Add(ParseTabellenZeile(zeile));
+                else if (zeile.Trim().Length > 0)
+                    SchliesseText();
                 continue;
             }
 
@@ -228,6 +249,126 @@ public static partial class Frontmatter
             // Zeilen außerhalb jedes Elements (sollte es nicht geben) werden ignoriert.
         }
         SchliesseText();
+    }
+
+    // ---------- Markdown-Tabellen ----------
+
+    /// <summary>Zelleninhalt fürs Markdown: Pipes und Umbrüche maskieren.</summary>
+    static string MdZelle(string s) => s
+        .Replace("\\", "\\\\")
+        .Replace("|", "\\|")
+        .Replace("\r\n", "\n")
+        .Replace("\n", "<br>");
+
+    static string MdZelleZurueck(string s)
+    {
+        s = s.Trim().Replace("<br>", "\n");
+        var sb = new StringBuilder(s.Length);
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '\\' && i + 1 < s.Length) { sb.Append(s[i + 1]); i++; }
+            else sb.Append(s[i]);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>"| a | b |" → Zellen, maskierte \| bleiben Inhalt.</summary>
+    static List<string> ParseTabellenZeile(string zeile)
+    {
+        var inhalt = zeile.Trim();
+        if (inhalt.StartsWith('|')) inhalt = inhalt[1..];
+        if (inhalt.EndsWith('|') && !inhalt.EndsWith("\\|")) inhalt = inhalt[..^1];
+
+        var zellen = new List<string>();
+        var aktuelle = new StringBuilder();
+        for (int i = 0; i < inhalt.Length; i++)
+        {
+            if (inhalt[i] == '\\' && i + 1 < inhalt.Length)
+            {
+                aktuelle.Append(inhalt[i]).Append(inhalt[i + 1]);
+                i++;
+            }
+            else if (inhalt[i] == '|')
+            {
+                zellen.Add(MdZelleZurueck(aktuelle.ToString()));
+                aktuelle.Clear();
+            }
+            else
+            {
+                aktuelle.Append(inhalt[i]);
+            }
+        }
+        zellen.Add(MdZelleZurueck(aktuelle.ToString()));
+        return zellen;
+    }
+
+    /// <summary>Markdown-Trennzeile (|---|---|) entfernen und alle Zeilen auf
+    /// gleiche Spaltenzahl auffüllen.</summary>
+    static void NormalisiereTabelle(TabelleElement tab)
+    {
+        tab.Zeilen.RemoveAll(z =>
+            z.Count > 0 && z.All(zelle => zelle.Trim().Length == 0 ||
+                zelle.Trim().All(c => c is '-' or ':')) &&
+            z.Any(zelle => zelle.Contains('-')));
+        int spalten = tab.Zeilen.Count == 0 ? 0 : tab.Zeilen.Max(z => z.Count);
+        foreach (var zeile in tab.Zeilen)
+        {
+            while (zeile.Count < spalten) zeile.Add("");
+        }
+        if (tab.Zeilen.Count == 0)
+            tab.Zeilen.Add(new List<string> { "", "" });
+    }
+
+    /// <summary>Vorlagen-Body in Elemente zerlegen: Markdown-Tabellenzeilen
+    /// ("| … | … |") werden echte Tabellen-Elemente, alles andere Textfelder —
+    /// untereinander auf der Fläche gestapelt.</summary>
+    public static List<NoteElement> ElementeAusVorlage(string body)
+    {
+        var elemente = new List<NoteElement>();
+        double y = 8;
+        var text = new StringBuilder();
+        TabelleElement? tabelle = null;
+
+        void SchliesseText()
+        {
+            var t = text.ToString().Trim('\n');
+            text.Clear();
+            if (t.Length == 0) return;
+            elemente.Add(new TextElement { X = 0, Y = y, Breite = 620, Text = t });
+            y += GeschaetzteTextHoehe(t) + 16;
+        }
+        void SchliesseTabelle()
+        {
+            if (tabelle is null) return;
+            NormalisiereTabelle(tabelle);
+            tabelle.Y = y;
+            elemente.Add(tabelle);
+            y += tabelle.Zeilen.Count * 30 + 24;
+            tabelle = null;
+        }
+
+        foreach (var zeile in body.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (zeile.TrimStart().StartsWith('|'))
+            {
+                if (tabelle is null)
+                {
+                    SchliesseText();
+                    tabelle = new TabelleElement { X = 0, Breite = 620 };
+                }
+                tabelle.Zeilen.Add(ParseTabellenZeile(zeile));
+            }
+            else
+            {
+                SchliesseTabelle();
+                text.AppendLine(zeile);
+            }
+        }
+        SchliesseTabelle();
+        SchliesseText();
+        if (elemente.Count == 0)
+            elemente.Add(new TextElement { X = 0, Y = 8, Breite = 620, Text = "" });
+        return elemente;
     }
 
     // ---------- Altes Blockformat lesen und in Elemente migrieren ----------
@@ -349,7 +490,20 @@ public static partial class Frontmatter
                     sb.Append($"<!--el bild {pos} h={(int)b.Hoehe} datei=\"{b.Datei}\"-->\n\n");
                     break;
                 case DateiElement d:
-                    sb.Append($"<!--el datei {pos} h={(int)d.Hoehe} datei=\"{d.Datei}\"-->\n\n");
+                    sb.Append($"<!--el datei {pos} h={(int)d.Hoehe} datei=\"{d.Datei}\"");
+                    if (d.Seite > 0) sb.Append($" seite={d.Seite}");
+                    sb.Append("-->\n\n");
+                    break;
+                case TabelleElement tab when tab.Zeilen.Count > 0:
+                    sb.Append($"<!--el tabelle {pos}-->\n");
+                    for (int z = 0; z < tab.Zeilen.Count; z++)
+                    {
+                        sb.Append("| " + string.Join(" | ", tab.Zeilen[z].Select(MdZelle)) + " |\n");
+                        if (z == 0) // Trennzeile → lesbares GitHub-Markdown
+                            sb.Append("|" + string.Concat(
+                                Enumerable.Repeat(" --- |", tab.Zeilen[z].Count)) + "\n");
+                    }
+                    sb.Append('\n');
                     break;
             }
         }

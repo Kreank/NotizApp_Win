@@ -1,0 +1,39 @@
+<Window x:Class="NotizApp.VorlageEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vorlage bearbeiten" Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        ShowInTaskbar="False">
+    <StackPanel Margin="20">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Left" Margin="0,0,12,0">
+                <TextBlock Text="Symbol" FontWeight="SemiBold"/>
+                <TextBox x:Name="IconBox" Width="52" Padding="4" Margin="0,6,0,0"
+                         FontSize="16" HorizontalContentAlignment="Center"
+                         MaxLength="4" ToolTip="Ein Emoji, z.B. 🏠 🚨 🔧 (Windows-Taste + Punkt)"/>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Name" FontWeight="SemiBold"/>
+                <TextBox x:Name="NameBox" Padding="4" Margin="0,6,0,0"
+                         ToolTip="So erscheint die Vorlage im Menü, z.B. „Begehung“"/>
+            </StackPanel>
+        </DockPanel>
+
+        <TextBlock Text="Titelvorschlag" FontWeight="SemiBold" Margin="0,14,0,0"/>
+        <TextBox x:Name="TitelBox" Padding="4" Margin="0,6,0,0"
+                 ToolTip="Wird als Notiz-Titel eingesetzt, wenn der Titel noch leer ist"/>
+
+        <TextBlock Text="Inhalt" FontWeight="SemiBold" Margin="0,14,0,0"/>
+        <TextBox x:Name="BodyBox" Margin="0,6,0,0" Padding="6" Height="220"
+                 AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto"
+                 FontFamily="Consolas" FontSize="13"/>
+        <TextBlock FontSize="11" Opacity="0.6" Margin="0,6,0,0" TextWrapping="Wrap"
+                   Text="Tipps: „- [ ] Punkt“ ergibt eine abhakbare Aufgabe, „**fett**“ eine Überschrift. {datum} und {zeit} werden beim Einfügen durch das aktuelle Datum bzw. die Uhrzeit ersetzt. Zeilen wie „| Material | Menge |“ werden zu einer echten Tabelle (erste Zeile = Kopfzeile)."/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="Abbrechen" MinWidth="90" Margin="0,0,8,0" IsCancel="True"/>
+            <Button Content="Übernehmen" MinWidth="90" IsDefault="True" Click="Ok_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -17,6 +17,8 @@ public class AppSettings
     public bool ListeZu { get; set; }
     /// <summary>KI-Chat-Panel rechts eingeblendet.</summary>
     public bool ChatOffen { get; set; }
+    /// <summary>Breite des KI-Chat-Panels in Pixeln.</summary>
+    public double ChatBreite { get; set; } = 380;
     /// <summary>Farbe je Notizbuch (Name → Hex "#RRGGBB").</summary>
     public Dictionary<string, string> NotizbuchFarben { get; set; } = new();
 }

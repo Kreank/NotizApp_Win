@@ -163,7 +163,18 @@ public partial class KiChatPanel : UserControl
         SendenButton.IsEnabled = false;
         BildButton.IsEnabled = false;
         AbbrechenButton.Visibility = Visibility.Visible;
-        StatusText.Text = "Codex generiert Bild…";
+
+        // Mitlaufende Uhr: Bildgenerierung dauert oft 2–4 Minuten — ohne sichtbaren
+        // Fortschritt wirkt das schnell wie ein Hänger
+        var startZeit = DateTime.Now;
+        StatusText.Text = "Codex generiert Bild… (dauert oft 2–4 Minuten)";
+        var uhr = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        uhr.Tick += (_, _) => StatusText.Text =
+            $"Codex generiert Bild… {DateTime.Now - startZeit:m\\:ss} (dauert oft 2–4 Minuten)";
+        uhr.Start();
         try
         {
             // Läuft lokal (Codex-App) — Docker wird hierfür nicht gebraucht
@@ -188,6 +199,7 @@ public partial class KiChatPanel : UserControl
         }
         finally
         {
+            uhr.Stop();
             _laeuft = false;
             _cts = null;
             StatusText.Text = "";
@@ -204,7 +216,8 @@ public partial class KiChatPanel : UserControl
 
     HashSet<string> VorhandeneDateien() =>
         Directory.Exists(_ausgabeOrdner)
-            ? Directory.EnumerateFiles(_ausgabeOrdner).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ? Directory.EnumerateFiles(_ausgabeOrdner, "*", SearchOption.AllDirectories)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     void ScrolleAnsEnde() =>
