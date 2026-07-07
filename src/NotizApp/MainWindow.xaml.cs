@@ -85,6 +85,17 @@ public partial class MainWindow : Window
             {
                 var anzahl = _store.Notizen.Count(n => n.Notizbuch == nb);
                 var item = new ListBoxItem { Content = $"📁 {nb}  ({anzahl})", Tag = nb };
+
+                var menu = new ContextMenu();
+                var umbenennen = new MenuItem { Header = "Umbenennen…" };
+                umbenennen.Click += (_, _) => UmbenenneNotizbuch(nb);
+                var loeschen = new MenuItem { Header = "Löschen" };
+                loeschen.Click += (_, _) => LoescheNotizbuch(nb);
+                menu.Items.Add(umbenennen);
+                menu.Items.Add(new Separator());
+                menu.Items.Add(loeschen);
+                item.ContextMenu = menu;
+
                 NotizbuchListe.Items.Add(item);
                 if (nb == nbAuswahl) item.IsSelected = true;
             }
@@ -160,6 +171,53 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name)) return;
         _store.NeuesNotizbuch(name);
         AktualisiereSidebar();
+    }
+
+    void UmbenenneNotizbuch(string nb)
+    {
+        var neu = TextPromptWindow.Frage(this, "Notizbuch umbenennen",
+            $"Neuer Name für „{nb}“:", vorgabe: nb);
+        if (string.IsNullOrWhiteSpace(neu) || neu == nb) return;
+
+        SpeichereAktuelle(); // offene Änderungen sichern, bevor Pfade wechseln
+        var ergebnis = _store.NotizbuchUmbenennen(nb, neu);
+        if (ergebnis is null)
+        {
+            MessageBox.Show(this, $"Es gibt bereits ein Notizbuch „{neu}“.",
+                "Umbenennen", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (_filterNotizbuch == nb) _filterNotizbuch = ergebnis;
+        if (_settings.Aktuell.QuickNotebook == nb)
+        {
+            _settings.Aktuell.QuickNotebook = ergebnis;
+            _settings.Speichere();
+        }
+        AktualisiereSidebar();
+        AktualisiereListe();
+    }
+
+    void LoescheNotizbuch(string nb)
+    {
+        var anzahl = _store.Notizen.Count(n => n.Notizbuch == nb);
+        var antwort = MessageBox.Show(this,
+            anzahl == 0
+                ? $"Leeres Notizbuch „{nb}“ löschen?"
+                : $"Notizbuch „{nb}“ mit {anzahl} Notiz(en) endgültig löschen?\nDas kann nicht rückgängig gemacht werden.",
+            "Notizbuch löschen", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (antwort != MessageBoxResult.Yes) return;
+
+        if (_aktuelleNotiz?.Notizbuch == nb)
+        {
+            _autosaveTimer.Stop();
+            _aktuelleNotiz = null;
+            Editor.LadeNote(null);
+            ZeigeEditorHinweis();
+        }
+        _store.NotizbuchLoeschen(nb);
+        if (_filterNotizbuch == nb) _filterNotizbuch = null;
+        AktualisiereSidebar();
+        AktualisiereListe();
     }
 
     void Einstellungen_Click(object sender, RoutedEventArgs e)
@@ -257,6 +315,13 @@ public partial class MainWindow : Window
             };
             VerschiebenMenu.Items.Add(item);
         }
+    }
+
+    void NotizListe_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete) return;
+        NotizLoeschen_Click(sender, e);
+        e.Handled = true;
     }
 
     void NotizLoeschen_Click(object sender, RoutedEventArgs e)

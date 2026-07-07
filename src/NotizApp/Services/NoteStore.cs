@@ -299,12 +299,45 @@ public class NoteStore
 
     public string NeuesNotizbuch(string name)
     {
+        name = BereinigeOrdnerName(name);
+        Directory.CreateDirectory(Path.Combine(DataFolder, name));
+        return name;
+    }
+
+    static string BereinigeOrdnerName(string name)
+    {
         foreach (var c in Path.GetInvalidFileNameChars())
             name = name.Replace(c, '-');
         name = name.Trim();
-        if (name.Length == 0) name = "Neues Notizbuch";
-        Directory.CreateDirectory(Path.Combine(DataFolder, name));
-        return name;
+        return name.Length == 0 ? "Neues Notizbuch" : name;
+    }
+
+    /// <summary>Notizbuch-Ordner umbenennen; passt Pfade der geladenen Notizen an.
+    /// Liefert den neuen Namen oder null, wenn das Ziel schon existiert.</summary>
+    public string? NotizbuchUmbenennen(string alt, string neu)
+    {
+        neu = BereinigeOrdnerName(neu);
+        if (neu.Equals(alt, StringComparison.OrdinalIgnoreCase)) return neu;
+        var altPfad = Path.Combine(DataFolder, alt);
+        var neuPfad = Path.Combine(DataFolder, neu);
+        if (!Directory.Exists(altPfad) || Directory.Exists(neuPfad)) return null;
+
+        Directory.Move(altPfad, neuPfad);
+        foreach (var note in Notizen.Where(n => n.Notizbuch == alt))
+        {
+            note.Notizbuch = neu;
+            note.Pfad = Path.Combine(neuPfad, Path.GetFileName(note.Pfad));
+            note.MeldeAnzeigeGeaendert();
+        }
+        return neu;
+    }
+
+    /// <summary>Notizbuch samt aller Notizen und Sidecars löschen.</summary>
+    public void NotizbuchLoeschen(string name)
+    {
+        var pfad = Path.Combine(DataFolder, name);
+        try { Directory.Delete(pfad, recursive: true); } catch { }
+        Notizen.RemoveAll(n => n.Notizbuch == name);
     }
 
     /// <summary>Alle in Notizen verwendeten Tags mit Häufigkeit.</summary>

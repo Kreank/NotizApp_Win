@@ -108,7 +108,8 @@
                 <ListBox x:Name="NotizListe" BorderThickness="0" Background="Transparent"
                          HorizontalContentAlignment="Stretch"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         SelectionChanged="NotizListe_SelectionChanged">
+                         SelectionChanged="NotizListe_SelectionChanged"
+                         KeyDown="NotizListe_KeyDown">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Margin="2,6">
