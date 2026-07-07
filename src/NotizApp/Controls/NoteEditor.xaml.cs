@@ -32,6 +32,8 @@ public partial class NoteEditor : UserControl
     public event Action? SpeichernAngefordert;
     /// <summary>Fokus-Modus umgeschaltet (Host klappt die Seitenleisten ein/aus).</summary>
     public event Action<bool>? FokusUmgeschaltet;
+    /// <summary>Chat-Button gedrückt (Host blendet das Chat-Panel ein/aus).</summary>
+    public event Action? ChatAngefordert;
 
     Note? _note;
     bool _laden;          // Guard: Notiz wird gerade in die UI geladen
@@ -421,6 +423,47 @@ public partial class NoteEditor : UserControl
     /// <summary>Fokus-Zustand von außen setzen (F11 im Hauptfenster).</summary>
     public void SetzeFokusToggle(bool an) => FokusToggle.IsChecked = an;
 
+    void Chat_Click(object sender, RoutedEventArgs e) => ChatAngefordert?.Invoke();
+
+    // ---------- Übernahme aus dem KI-Chat ----------
+
+    /// <summary>Titel + KI-Body der aktuellen Notiz (nie der Kundendaten-Kopf); null wenn leer.</summary>
+    public (string Titel, string Body)? KiKontext()
+    {
+        if (_note is null) return null;
+        var body = KiService.ErzeugeKiBody(
+            _elemente.OfType<TextElementVm>()
+                .OrderBy(t => t.Y).ThenBy(t => t.X)
+                .Select(t => t.Text),
+            _tintenText);
+        if (string.IsNullOrWhiteSpace(body)) return null;
+        var titel = TitelBox.Text.Trim();
+        return (titel.Length == 0 ? "(ohne Titel)" : titel, body);
+    }
+
+    /// <summary>Text als neues Textfeld unten an die Notiz anfügen (z.B. Chat-Antwort).</summary>
+    public void FuegeTextAn(string text)
+    {
+        if (_note is null || string.IsNullOrWhiteSpace(text)) return;
+        FuegeElementHinzu(new TextElementVm
+        {
+            X = 0,
+            Y = NaechsteFreieY(),
+            Breite = 620,
+            Text = text.Trim(),
+        });
+        PasseHoeheAn();
+        MeldeAenderung();
+    }
+
+    /// <summary>Externe Datei kopieren und als Objekt auf die Fläche legen (z.B. Chat-Anhang).</summary>
+    public void FuegeExterneDateiAn(string pfad)
+    {
+        if (_note is null || !System.IO.File.Exists(pfad)) return;
+        FuegeDateiObjektAn(KopiereAnhang(pfad));
+        MeldeAenderung();
+    }
+
     // ---------- Werkzeuge ----------
 
     void Werkzeug_Checked(object sender, RoutedEventArgs e)
@@ -622,19 +665,11 @@ public partial class NoteEditor : UserControl
 
     string? AktuellerKiBody()
     {
-        var body = KiService.ErzeugeKiBody(
-            _elemente.OfType<TextElementVm>()
-                .OrderBy(t => t.Y).ThenBy(t => t.X)
-                .Select(t => t.Text),
-            _tintenText);
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            MessageBox.Show(Window.GetWindow(this)!,
-                "Die Notiz enthält noch keinen Text, den die KI verarbeiten könnte.",
-                "NotizApp", MessageBoxButton.OK, MessageBoxImage.Information);
-            return null;
-        }
-        return body;
+        if (KiKontext() is { } kontext) return kontext.Body;
+        MessageBox.Show(Window.GetWindow(this)!,
+            "Die Notiz enthält noch keinen Text, den die KI verarbeiten könnte.",
+            "NotizApp", MessageBoxButton.OK, MessageBoxImage.Information);
+        return null;
     }
 
     void KiAktion_Click(object sender, RoutedEventArgs e)

@@ -15,6 +15,8 @@ public class AppSettings
     public bool SidebarZu { get; set; }
     /// <summary>Mittlere Spalte (Suche/Notizliste) eingeklappt.</summary>
     public bool ListeZu { get; set; }
+    /// <summary>KI-Chat-Panel rechts eingeblendet.</summary>
+    public bool ChatOffen { get; set; }
 }
 
 /// <summary>

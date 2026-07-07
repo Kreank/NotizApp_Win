@@ -156,32 +156,107 @@ public class KiService
                    $"-p --system-prompt {PsQuote(Instruktion(aktion))} --output-format text";
         var (code, stdout, stderr) = await StarteAsync("docker", args, body, ct, Zeitlimit);
 
-        if (code != 0)
-        {
-            var fehler = (stderr.Trim().Length > 0 ? stderr : stdout).Trim();
-            if (fehler.Contains("Not logged in", StringComparison.OrdinalIgnoreCase) ||
-                fehler.Contains("/login", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Claude ist im Container noch nicht angemeldet.\n\n" +
-                    "Einmalig im Projektordner ausführen:\n    .\\docker\\einrichten.ps1");
-            }
-            if (fehler.Contains("Invalid bearer token", StringComparison.OrdinalIgnoreCase) ||
-                fehler.Contains("Failed to authenticate", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Der gespeicherte Claude-Token ist ungültig oder abgelaufen.\n\n" +
-                    "Bitte neu erzeugen:\n    .\\docker\\einrichten.ps1");
-            }
-            if (fehler.Length > 400) fehler = fehler[..400] + "…";
-            throw new InvalidOperationException(
-                fehler.Length > 0 ? $"Claude-Aufruf fehlgeschlagen:\n{fehler}"
-                                  : "Claude-Aufruf fehlgeschlagen (unbekannter Fehler).");
-        }
+        if (code != 0) throw ClaudeFehler(stdout, stderr);
         var antwort = stdout.Trim();
         if (antwort.Length == 0)
             throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
         return antwort;
+    }
+
+    static InvalidOperationException ClaudeFehler(string stdout, string stderr)
+    {
+        var fehler = (stderr.Trim().Length > 0 ? stderr : stdout).Trim();
+        if (fehler.Contains("Not logged in", StringComparison.OrdinalIgnoreCase) ||
+            fehler.Contains("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return new InvalidOperationException(
+                "Claude ist im Container noch nicht angemeldet.\n\n" +
+                "Einmalig im Projektordner ausführen:\n    .\\docker\\einrichten.ps1");
+        }
+        if (fehler.Contains("Invalid bearer token", StringComparison.OrdinalIgnoreCase) ||
+            fehler.Contains("Failed to authenticate", StringComparison.OrdinalIgnoreCase))
+        {
+            return new InvalidOperationException(
+                "Der gespeicherte Claude-Token ist ungültig oder abgelaufen.\n\n" +
+                "Bitte neu erzeugen:\n    .\\docker\\einrichten.ps1");
+        }
+        if (fehler.Length > 400) fehler = fehler[..400] + "…";
+        return new InvalidOperationException(
+            fehler.Length > 0 ? $"Claude-Aufruf fehlgeschlagen:\n{fehler}"
+                              : "Claude-Aufruf fehlgeschlagen (unbekannter Fehler).");
+    }
+
+    // ---------- Freier Chat ----------
+
+    const string ChatSystem =
+        "Du bist der eingebaute KI-Assistent einer Notiz-App in einem deutschen " +
+        "SHK-Handwerksbetrieb (Sanitär/Heizung/Klima). Du chattest mit dem Inhaber. " +
+        "Antworte auf Deutsch, sachlich und knapp, in Markdown. " +
+        "Du darfst im Internet recherchieren. Bei Recherchen gibst du zu jeder " +
+        "wichtigen Aussage die Quelle als URL an. Nützliche Bilder/Diagramme lädst du " +
+        "mit curl nach /ausgabe (nur seriöse Quellen, Formate jpg/png, sinnvolle " +
+        "Dateinamen). Dateien erstellst du ausschließlich im Ordner /ausgabe: " +
+        "Markdown/HTML direkt, PDFs mit 'pandoc eingabe.md -o name.pdf " +
+        "--pdf-engine=weasyprint', Word mit 'pandoc eingabe.md -o name.docx', " +
+        "Tabellen als .csv (in Excel zu öffnen). Lösche Zwischendateien, sodass in " +
+        "/ausgabe nur fertige Dateien liegen. Wenn dir eine Notiz mitgegeben wurde, " +
+        "beziehe dich darauf; erfinde keine Fakten über den Betrieb oder Kunden.";
+
+    /// <summary>
+    /// Eine Chat-Nachricht an Claude senden. sessionId=null startet eine neue
+    /// Unterhaltung; sonst wird die bestehende fortgesetzt (Verlauf liegt im
+    /// Config-Volume). Der Austauschordner wird als /ausgabe gemountet — dort
+    /// entstandene Dateien zeigt die App als Anhänge an.
+    /// Liefert Antwort + Session-Id für die nächste Nachricht.
+    /// </summary>
+    public async Task<(string Antwort, string? SessionId)> ChatAsync(
+        string nachricht, string? sessionId, string ausgabeOrdner, CancellationToken ct)
+    {
+        Directory.CreateDirectory(ausgabeOrdner);
+
+        var envDatei = Path.Combine(SettingsService.SettingsOrdner, "claude.env");
+        var envTeil = File.Exists(envDatei) ? $"--env-file {PsQuote(envDatei)} " : "";
+        var resumeTeil = sessionId is null ? "" : $"--resume {PsQuote(sessionId)} ";
+
+        var args = $"run --rm -i {envTeil}" +
+                   $"-v {PsQuote(ausgabeOrdner + ":/ausgabe")} " +
+                   $"-v {ConfigVolume}:/home/claude {Image} " +
+                   $"-p {resumeTeil}--system-prompt {PsQuote(ChatSystem)} " +
+                   "--dangerously-skip-permissions --output-format json";
+
+        var (code, stdout, stderr) = await StarteAsync("docker", args, nachricht, ct,
+            TimeSpan.FromMinutes(10));
+
+        if (code != 0)
+        {
+            // Session im Volume verloren (z.B. Volume neu erstellt) → frisch starten
+            if (sessionId is not null &&
+                (stdout + stderr).Contains("No conversation found", StringComparison.OrdinalIgnoreCase))
+            {
+                return await ChatAsync(nachricht, null, ausgabeOrdner, ct);
+            }
+            throw ClaudeFehler(stdout, stderr);
+        }
+
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(stdout);
+            var antwort = json.RootElement.GetProperty("result").GetString() ?? "";
+            var neueSession = json.RootElement.TryGetProperty("session_id", out var sid)
+                ? sid.GetString()
+                : sessionId;
+            if (antwort.Trim().Length == 0)
+                throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
+            return (antwort.Trim(), neueSession);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Zur Sicherheit: unerwartetes Format → Rohtext anzeigen
+            var roh = stdout.Trim();
+            if (roh.Length == 0)
+                throw new InvalidOperationException("Claude hat eine leere Antwort geliefert.");
+            return (roh, sessionId);
+        }
     }
 
     /// <summary>

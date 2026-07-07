@@ -1,0 +1,110 @@
+<UserControl x:Class="NotizApp.Controls.KiChatPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:NotizApp.Controls">
+    <UserControl.Resources>
+        <!-- Sprechblase: Claude links neutral, eigene Nachrichten rechts akzentuiert -->
+        <DataTemplate DataType="{x:Type local:ChatNachricht}">
+            <Border x:Name="Blase" Margin="0,4" Padding="10,8" CornerRadius="8"
+                    MaxWidth="520" HorizontalAlignment="Left"
+                    Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                <StackPanel>
+                    <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True"
+                             BorderThickness="0" Background="Transparent" Padding="0"
+                             TextWrapping="Wrap" FontSize="13"/>
+                    <ItemsControl ItemsSource="{Binding Dateien}" Margin="0,6,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,2" Padding="6,4" CornerRadius="4"
+                                        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="💾"
+                                                ToolTip="Auf dem PC speichern unter…"
+                                                BorderThickness="0" Background="Transparent"
+                                                Padding="4,0" Click="DateiSpeichern_Click"/>
+                                        <Button DockPanel.Dock="Right" Content="📌"
+                                                ToolTip="Als Objekt in die aktuelle Notiz legen"
+                                                BorderThickness="0" Background="Transparent"
+                                                Padding="4,0" Click="DateiInNotiz_Click"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                   FontSize="12" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Pfad}"/>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="Einfuegen" Content="↧ In Notiz einfügen"
+                            HorizontalAlignment="Left" Margin="0,6,0,0" Padding="6,2"
+                            FontSize="11" Visibility="Collapsed"
+                            ToolTip="Antwort als Textfeld unten an die aktuelle Notiz anfügen"
+                            Click="TextInNotiz_Click"/>
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding VonMir}" Value="True">
+                    <Setter TargetName="Blase" Property="HorizontalAlignment" Value="Right"/>
+                    <Setter TargetName="Blase" Property="Background" Value="#333B78D8"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding VonMir}" Value="False"/>
+                        <Condition Binding="{Binding IstFehler}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="Einfuegen" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding IstFehler}" Value="True">
+                    <Setter TargetName="Blase" Property="Background" Value="#33E5484D"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="4,10,10,10">
+        <!-- Kopf -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Content="🗑 Neu" Padding="6,2" FontSize="11"
+                    BorderThickness="0" Background="Transparent"
+                    ToolTip="Neue Unterhaltung beginnen (Verlauf verwerfen)"
+                    Click="NeuerChat_Click"/>
+            <TextBlock Text="✨ KI-Chat" FontWeight="SemiBold" VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <!-- Eingabe -->
+        <Border DockPanel.Dock="Bottom" Padding="6" CornerRadius="6"
+                Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+            <DockPanel>
+                <CheckBox x:Name="KontextCheck" DockPanel.Dock="Top" Margin="0,0,0,6"
+                          Content="Aktuelle Notiz mitgeben" FontSize="11" IsChecked="True"
+                          ToolTip="Schickt den Text der geöffneten Notiz mit (ohne Kundendaten-Kopf)"/>
+                <Button x:Name="SendenButton" DockPanel.Dock="Right" Content="➤"
+                        Margin="6,0,0,0" Padding="10,4" VerticalAlignment="Bottom"
+                        ToolTip="Senden (Enter). Neue Zeile: Umschalt+Enter"
+                        Click="Senden_Click"/>
+                <TextBox x:Name="EingabeBox" AcceptsReturn="True" TextWrapping="Wrap"
+                         MaxHeight="120" VerticalScrollBarVisibility="Auto"
+                         FontSize="13" Padding="4"
+                         PreviewKeyDown="EingabeBox_PreviewKeyDown"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Status -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="2,6">
+            <Button x:Name="AbbrechenButton" DockPanel.Dock="Right" Content="Abbrechen"
+                    FontSize="11" Padding="6,1" Visibility="Collapsed"
+                    Click="Abbrechen_Click"/>
+            <TextBlock x:Name="StatusText" Text="" FontSize="11" Opacity="0.65"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+
+        <!-- Verlauf -->
+        <ScrollViewer x:Name="ChatScroller" VerticalScrollBarVisibility="Auto"
+                      PanningMode="VerticalOnly">
+            <StackPanel>
+                <TextBlock x:Name="LeerHinweis" Opacity="0.55" TextWrapping="Wrap" Margin="4,8"
+                           Text="Frag mich etwas — z.B. „Sieh dir die Notiz an und such mir Quellen zum Brandschutz in öffentlichen Gebäuden raus“ oder „Erstell mir daraus ein Angebots-Anschreiben als PDF“.&#10;&#10;Recherchen laufen mit Quellenangabe, erstellte Dateien kannst du in die Notiz legen (📌) oder auf dem PC speichern (💾). Es wird nie der Kundendaten-Kopf gesendet."/>
+                <ItemsControl x:Name="NachrichtenListe"/>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

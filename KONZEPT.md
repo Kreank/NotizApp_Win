@@ -128,6 +128,14 @@ Volltextsuche über:
   Aufgaben extrahieren
 - Ergebnis wird als Vorschlag angezeigt (editierbar) und erst nach
   Bestätigung übernommen
+- **KI-Chat** (💬-Button, Panel rechts neben dem Editor): freie Unterhaltung
+  mit Claude über mehrere Nachrichten (Session-Fortsetzung im Container).
+  Optional wird der Body der offenen Notiz mitgegeben („Sieh dir die Notiz an
+  und such mir Quellen zu … raus"). Claude recherchiert im Internet mit
+  Quellen-URLs, lädt Bilder/Diagramme und erstellt Dateien (PDF/Word/HTML/
+  Markdown/CSV) in einem isolierten Austauschordner. Antworten lassen sich
+  per Knopf in die Notiz einfügen; Dateien als Objekt auf die Fläche legen
+  (📌) oder auf dem PC speichern (💾)
 - **Dateien erstellen/suchen** (✨ → „Dateien erstellen/suchen…"): freier
   Auftrag; Claude arbeitet mit Schreibrechten + Internet in einem leeren
   Austauschordner (`/ausgabe`-Mount, pandoc/weasyprint/curl im Image).

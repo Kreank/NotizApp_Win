@@ -24,6 +24,8 @@
             <ColumnDefinition x:Name="ListeSpalte" Width="330" MinWidth="240"/>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*" MinWidth="360"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition x:Name="ChatSpalte" Width="0"/>
         </Grid.ColumnDefinitions>
 
         <!-- ===== Sidebar ===== -->
@@ -198,5 +200,11 @@
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextAlignment="Center" Opacity="0.5"/>
         </Grid>
+
+        <GridSplitter x:Name="SplitterChat" Grid.Column="5" Width="4" HorizontalAlignment="Center"
+                      VerticalAlignment="Stretch" Background="Transparent" Visibility="Collapsed"/>
+
+        <!-- ===== KI-Chat ===== -->
+        <controls:KiChatPanel x:Name="ChatPanel" Grid.Column="6" Visibility="Collapsed"/>
     </Grid>
 </Window>

@@ -370,6 +370,10 @@
                         ToolTip="Bild oder Datei als Objekt ablegen (png, jpg, pdf, xlsx, docx, md, txt) — verschiebbar, skalierbar, Draufzeichnen inklusive"
                         Click="DateiEinfuegen_Click"/>
 
+                <Button Style="{StaticResource WerkzeugButton}" Content="💬 Chat"
+                        ToolTip="KI-Chat ein-/ausblenden: recherchieren, Dateien erstellen, Ergebnisse in die Notiz übernehmen"
+                        Click="Chat_Click"/>
+
                 <Button x:Name="KiButton" Style="{StaticResource WerkzeugButton}" Content="✨ KI"
                         ToolTip="KI-Aufbereitung (sendet nur den Notiztext, keine Kundendaten)"
                         Click="Ki_Click">

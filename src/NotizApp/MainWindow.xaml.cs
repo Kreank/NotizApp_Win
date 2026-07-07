@@ -59,6 +59,13 @@ public partial class MainWindow : Window
         Editor.NotizGeaendert += Editor_NotizGeaendert;
         Editor.SpeichernAngefordert += SpeichereAktuelle;
         Editor.FokusUmgeschaltet += SetzeFokusModus;
+        Editor.ChatAngefordert += () => SetzeChatSichtbar(!_chatOffen);
+
+        ChatPanel.Ki = Editor.Ki;
+        ChatPanel.HoleNotizKontext = () => Editor.KiKontext();
+        ChatPanel.TextEinfuegen += ChatTextEinfuegen;
+        ChatPanel.DateiEinfuegen += ChatDateiEinfuegen;
+        if (settings.Aktuell.ChatOffen) SetzeChatSichtbar(true);
 
         _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _autosaveTimer.Tick += (_, _) => { _autosaveTimer.Stop(); SpeichereAktuelle(); };
@@ -518,6 +525,54 @@ public partial class MainWindow : Window
         panel.Visibility = offen ? Visibility.Visible : Visibility.Collapsed;
         railElement.Visibility = rail ? Visibility.Visible : Visibility.Collapsed;
         splitter.Visibility = offen ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---------- KI-Chat ----------
+
+    bool _chatOffen;
+    GridLength _chatBreite = new(380);
+
+    void SetzeChatSichtbar(bool an)
+    {
+        if (an == _chatOffen) return;
+        _chatOffen = an;
+        if (an)
+        {
+            ChatSpalte.MinWidth = 300;
+            ChatSpalte.Width = _chatBreite;
+        }
+        else
+        {
+            if (ChatSpalte.Width.Value > 0) _chatBreite = ChatSpalte.Width;
+            ChatSpalte.MinWidth = 0;
+            ChatSpalte.Width = new GridLength(0);
+        }
+        ChatPanel.Visibility = an ? Visibility.Visible : Visibility.Collapsed;
+        SplitterChat.Visibility = an ? Visibility.Visible : Visibility.Collapsed;
+        _settings.Aktuell.ChatOffen = an;
+        _settings.Speichere();
+    }
+
+    void ChatTextEinfuegen(string text)
+    {
+        if (!Editor.HatNote)
+        {
+            MessageBox.Show(this, "Erst eine Notiz öffnen, dann kann ich den Text dort einfügen.",
+                "KI-Chat", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        Editor.FuegeTextAn(text);
+    }
+
+    void ChatDateiEinfuegen(string pfad)
+    {
+        if (!Editor.HatNote)
+        {
+            MessageBox.Show(this, "Erst eine Notiz öffnen, dann kann ich die Datei dort ablegen.",
+                "KI-Chat", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        Editor.FuegeExterneDateiAn(pfad);
     }
 
     /// <summary>Fenster aus dem Tray heraus anzeigen.</summary>
