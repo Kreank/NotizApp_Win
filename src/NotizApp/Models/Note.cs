@@ -49,6 +49,8 @@ public class TextElement : NoteElement
     public string? Farbe { get; set; }
     /// <summary>Schriftart-Name (z.B. "Consolas"), null = Standardschrift.</summary>
     public string? Schrift { get; set; }
+    /// <summary>Schriftgröße in px, null = Standardgröße (14).</summary>
+    public double? Groesse { get; set; }
 }
 
 /// <summary>Bild auf der Fläche (Dateiname neben der .md) — Tinte kann darüber liegen.</summary>

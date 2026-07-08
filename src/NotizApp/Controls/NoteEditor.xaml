@@ -140,7 +140,7 @@
                              Style="{StaticResource ElementTextBox}"
                              Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              AcceptsReturn="True" AcceptsTab="True"
-                             TextWrapping="Wrap" FontSize="14"
+                             TextWrapping="Wrap" FontSize="{Binding SchriftGroesse}"
                              SpellCheck.IsEnabled="False"
                              SizeChanged="TextElement_SizeChanged"/>
                 </Border>
@@ -707,11 +707,19 @@
                     </Button>
                 </WrapPanel>
 
-                <ComboBox x:Name="SchriftBox" Width="128" Margin="4,0" FontSize="12"
+                <ComboBox x:Name="SchriftBox" Width="128" Margin="4,0,2,0" FontSize="12"
                           VerticalAlignment="Center" MaxDropDownHeight="360"
                           Foreground="{DynamicResource AppTextBrush}"
                           ToolTip="Schriftart des aktiven Textfeldes — erst ins Textfeld klicken, dann Schrift wählen"
                           SelectionChanged="Schrift_Changed"/>
+
+                <ComboBox x:Name="SchriftGroesseBox" Width="56" Margin="0,0,4,0" FontSize="12"
+                          IsEditable="True" VerticalAlignment="Center" MaxDropDownHeight="360"
+                          Foreground="{DynamicResource AppTextBrush}"
+                          ToolTip="Schriftgröße des aktiven Textfeldes — erst ins Textfeld klicken, dann Größe wählen oder eintippen"
+                          SelectionChanged="SchriftGroesse_Changed"
+                          LostFocus="SchriftGroesse_LostFocus"
+                          PreviewKeyDown="SchriftGroesse_KeyDown"/>
 
                 <Separator Margin="6,2" Width="1"/>
 

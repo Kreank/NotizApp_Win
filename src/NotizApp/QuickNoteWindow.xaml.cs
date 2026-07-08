@@ -75,7 +75,7 @@ public partial class QuickNoteWindow : Window
     async void Speichern_Click(object sender, RoutedEventArgs e)
     {
         var vorlage = AktuelleVorlage;
-        var notizbuch = NotizbuchBox.SelectedItem as string ?? "Eingang";
+        var notizbuch = NotizbuchBox.SelectedItem as string ?? NoteStore.StandardNotizbuch;
         bool anruf = vorlage == "anruf";
 
         var titel = TitelBox.Text.Trim();

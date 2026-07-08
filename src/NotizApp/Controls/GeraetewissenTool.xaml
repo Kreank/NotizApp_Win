@@ -1,0 +1,139 @@
+<UserControl x:Class="NotizApp.Controls.GeraetewissenTool"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolZuSicht"/>
+        <Style x:Key="Eingabe" TargetType="TextBox">
+            <Setter Property="Padding" Value="9,7"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Background" Value="{DynamicResource AppFlaecheTiefBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Kopf -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="🔎 Gerätewissen" FontSize="22" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppTextBrush}"/>
+            <TextBlock Text="Artikel, Ersatzteile &amp; Wartungen in der Wissensbasis suchen (Vaillant u.a.)"
+                       FontSize="13" Margin="0,2,0,0"
+                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+        </StackPanel>
+
+        <!-- Suchleiste (feste Breite) -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBox x:Name="SuchBox" Width="440" Style="{StaticResource Eingabe}"
+                     KeyDown="SuchBox_KeyDown"
+                     ToolTip="z.B. ecoTEC Ausdehnungsgefäß, Artikelnummer, Fehlercode …"/>
+            <Button x:Name="SuchenButton" Content="Suchen" Width="110"
+                    Padding="0,7" Margin="8,0,0,0" FontWeight="SemiBold"
+                    Click="SuchenButton_Click"/>
+        </StackPanel>
+
+        <TextBlock x:Name="StatusText" Grid.Row="2" FontSize="12" Margin="2,0,0,10"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource AppTextLeiseBrush}"
+                   Text="Suchbegriff eingeben und suchen (oder Enter)."/>
+
+        <!-- Trefferliste -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+            <ItemsControl x:Name="TrefferListe" MaxWidth="720" HorizontalAlignment="Left">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border x:Name="Karte" CornerRadius="12" Padding="18" Margin="0,0,0,12"
+                                BorderThickness="1"
+                                Background="{DynamicResource AppFlaecheBrush}"
+                                BorderBrush="{DynamicResource AppRandBrush}">
+                            <StackPanel>
+                                <!-- Kopf: Kategorie-Badge links, Preis rechts -->
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding PreisAnzeige}"
+                                               FontSize="17" FontWeight="Bold"
+                                               VerticalAlignment="Center" Margin="12,0,0,0"
+                                               Foreground="{DynamicResource AppKupferBrush}"/>
+                                    <Border CornerRadius="9" Padding="9,2" HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Background="{Binding ArtLeiseBrush}"
+                                            Visibility="{Binding HatArt, Converter={StaticResource BoolZuSicht}}">
+                                        <TextBlock Text="{Binding ArtLabel}" FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{Binding ArtTextBrush}"/>
+                                    </Border>
+                                </DockPanel>
+
+                                <!-- Titel -->
+                                <TextBlock Text="{Binding Bezeichnung}" FontSize="15.5"
+                                           FontWeight="SemiBold" Margin="0,12,0,0"
+                                           TextWrapping="Wrap" LineHeight="21"
+                                           LineStackingStrategy="BlockLineHeight"
+                                           Foreground="{DynamicResource AppTextBrush}"/>
+
+                                <!-- Art.-Nr.-Chip + Meta -->
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Border CornerRadius="6" Padding="7,2"
+                                            Background="{DynamicResource AppFlaecheTiefBrush}"
+                                            BorderBrush="{DynamicResource AppRandBrush}"
+                                            BorderThickness="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Artikelnummer}"
+                                                   FontFamily="Consolas" FontSize="12"
+                                                   Foreground="{DynamicResource AppTextBrush}"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding Meta}" FontSize="12"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                </StackPanel>
+
+                                <!-- Details (aufbereiteter Langtext) -->
+                                <Expander Margin="0,12,0,0" FontSize="12"
+                                          Foreground="{DynamicResource AppTextLeiseBrush}"
+                                          Visibility="{Binding HatLangtext, Converter={StaticResource BoolZuSicht}}">
+                                    <Expander.Header>
+                                        <TextBlock Text="Details" FontSize="12"
+                                                   Foreground="{DynamicResource AppAkzentBrush}"/>
+                                    </Expander.Header>
+                                    <Border BorderBrush="{DynamicResource AppRandBrush}"
+                                            BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,10,0,0">
+                                        <TextBlock Text="{Binding LangtextAufbereitet}" FontSize="12.5"
+                                                   TextWrapping="Wrap" LineHeight="19"
+                                                   LineStackingStrategy="BlockLineHeight"
+                                                   Foreground="{DynamicResource AppTextBrush}"/>
+                                    </Border>
+                                </Expander>
+
+                                <!-- Aktionen -->
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                    <Button Content="➕ In Notiz" Padding="12,6" Margin="0,0,8,0"
+                                            FontSize="12" Click="Einfuegen_Click"/>
+                                    <Button Content="📋 Art.-Nr." Padding="12,6" FontSize="12"
+                                            ToolTip="Artikelnummer kopieren"
+                                            Click="KopiereNummer_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <Trigger SourceName="Karte" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Karte" Property="BorderBrush"
+                                        Value="{DynamicResource AppAkzentBrush}"/>
+                                <Setter TargetName="Karte" Property="Background"
+                                        Value="{DynamicResource AppFlaecheTiefBrush}"/>
+                            </Trigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

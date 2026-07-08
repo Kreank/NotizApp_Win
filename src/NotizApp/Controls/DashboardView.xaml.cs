@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using NotizApp.Models;
 using NotizApp.Services;
@@ -129,11 +130,12 @@ public class FeedKarteVm
 }
 
 /// <summary>
-/// Dashboard-Ansicht: Begrüßung, eigener Monatskalender mit Terminen aus den
-/// Aufgaben ("- [ ] Text @JJJJ-MM-TT") und ein von Claude recherchierter
-/// Neuigkeiten-Feed (KI, Recht &amp; Normen, Förderung, Technik) mit
-/// Kategorie-Filter-Pillen. Termin-Klick meldet die Quell-Notiz über
-/// <see cref="NotizGeklickt"/> ans Hauptfenster.
+/// Dashboard-Ansicht: freie Fläche (Canvas) mit frei verschieb- und
+/// größenverstellbaren Karten. Feste Karten sind Kalender und Termine (aus den
+/// Aufgaben "- [ ] Text @JJJJ-MM-TT"); jede von Claude recherchierte
+/// Neuigkeit ist eine eigene News-Karte. Anordnung und Größe werden pro Karte
+/// dauerhaft gespeichert (<see cref="AppSettings.DashboardLayout"/>). Termin-Klick
+/// meldet die Quell-Notiz über <see cref="NotizGeklickt"/> ans Hauptfenster.
 /// </summary>
 public partial class DashboardView : UserControl
 {
@@ -141,6 +143,15 @@ public partial class DashboardView : UserControl
 
     /// <summary>Wird vom Host gesetzt (dieselbe Instanz wie im Editor/Chat).</summary>
     public KiService? Ki { get; set; }
+
+    /// <summary>Wird vom Host NACH dem Konstruktor gesetzt — hält die dauerhaft
+    /// gespeicherte Karten-Anordnung (<see cref="AppSettings.DashboardLayout"/>).</summary>
+    public SettingsService? Einstellungen { get; set; }
+
+    /// <summary>Gespeichertes Layout wurde für Kalender/Termine bereits angewendet.
+    /// Passiert einmalig beim ersten <see cref="Aktualisiere"/>, weil
+    /// <see cref="Einstellungen"/> erst nach dem Konstruktor gesetzt ist.</summary>
+    bool _layoutAngewendet;
 
     /// <summary>Ein Termin wurde angeklickt — Host soll die Quell-Notiz öffnen.</summary>
     public event Action<Note>? NotizGeklickt;
@@ -159,16 +170,17 @@ public partial class DashboardView : UserControl
     FeedService? _feed;
     bool _feedLaeuft;
     DateTime _feedGeladen; // wann der Feed zuletzt in die Ansicht kam
-    /// <summary>Alle geladenen Feed-Karten (ungefiltert).</summary>
+    /// <summary>Alle geladenen Feed-Karten.</summary>
     List<FeedKarteVm> _feedKarten = new();
-    /// <summary>Aktiver Kategorie-Filter ("alle" oder ein Kategorie-Schlüssel).</summary>
-    string _feedFilter = "alle";
 
     public DashboardView()
     {
         InitializeComponent();
         var heute = DateOnly.FromDateTime(DateTime.Today);
         _monat = new DateOnly(heute.Year, heute.Month, 1);
+        // Verschieben/Größe der festen Karten: überlappungsfrei anordnen + speichern
+        KalenderKarte.LayoutGeaendert += KarteGeaendert;
+        TermineKarte.LayoutGeaendert += KarteGeaendert;
         AktualisiereKopf();
         ZeichneKalender();
         ZeichneTermine();
@@ -178,6 +190,7 @@ public partial class DashboardView : UserControl
     /// aktuellen Aufgaben übernehmen und alles neu zeichnen.</summary>
     public void Aktualisiere(List<TaskItem> aufgaben)
     {
+        WendeLayoutAnWennNoetig();
         var heute = DateOnly.FromDateTime(DateTime.Today);
         _termine = aufgaben
             .Where(a => !a.Erledigt && a.Faellig is { } f && f >= heute)
@@ -186,6 +199,17 @@ public partial class DashboardView : UserControl
         AktualisiereKopf();
         ZeichneKalender();
         ZeichneTermine();
+    }
+
+    /// <summary>Gespeicherte Anordnung der festen Karten (Kalender/Termine) einmalig
+    /// anwenden, sobald der Host <see cref="Einstellungen"/> gesetzt hat.</summary>
+    void WendeLayoutAnWennNoetig()
+    {
+        if (_layoutAngewendet || Einstellungen is null) return;
+        _layoutAngewendet = true;
+        WendeLayoutAn(KalenderKarte);
+        WendeLayoutAn(TermineKarte);
+        Arrangiere(null); // überlappungsfrei einrasten
     }
 
     // ---------- Kopfzeile ----------
@@ -371,51 +395,34 @@ public partial class DashboardView : UserControl
         if (_feedLaeuft) return;
         if (Ki is null)
         {
-            FeedHinweis.Text = "⚠ Der KI-Dienst ist nicht verfügbar.";
-            FeedHinweis.Visibility = Visibility.Visible;
+            StatusText.Text = "⚠ Der KI-Dienst ist nicht verfügbar.";
             return;
         }
         _feed ??= new FeedService(Ki);
 
         _feedLaeuft = true;
         FeedButton.IsEnabled = false;
-        FeedHinweis.Text = "⟳ Feed wird erstellt — Claude recherchiert… (das kann einige Minuten dauern)";
-        FeedHinweis.Visibility = Visibility.Visible;
+        StatusText.Text = "⟳ Claude recherchiert… (das kann einige Minuten dauern)";
         try
         {
             var eintraege = await _feed.HoleAsync(erzwingen,
                 s => StatusText.Text = s, CancellationToken.None);
             _feedKarten = eintraege.Select(e => new FeedKarteVm(e)).ToList();
             _feedGeladen = DateTime.Now;
-            // Filter beibehalten, sofern die Kategorie im neuen Feed noch vorkommt
-            if (_feedFilter != "alle" && _feedKarten.All(k => k.Kategorie != _feedFilter))
-                _feedFilter = "alle";
-            BaueFilterPillen();
             ZeigeFeedKarten();
-            if (_feedKarten.Count == 0)
-            {
-                FeedHinweis.Text = "Noch kein Feed — oben aktualisieren.";
-                FeedHinweis.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                FeedHinweis.Visibility = Visibility.Collapsed;
-            }
-            StatusText.Text = _feed.Stand is { } stand
-                ? $"Stand: {stand.ToString("dd.MM. HH:mm", Kultur)}"
-                : "";
+            StatusText.Text = _feedKarten.Count == 0
+                ? "Noch kein Feed — oben aktualisieren."
+                : _feed.Stand is { } stand
+                    ? $"Stand: {stand.ToString("dd.MM. HH:mm", Kultur)}"
+                    : "";
         }
         catch (OperationCanceledException)
         {
-            FeedHinweis.Text = "Abgebrochen.";
-            FeedHinweis.Visibility = Visibility.Visible;
-            StatusText.Text = "";
+            StatusText.Text = "Abgebrochen.";
         }
         catch (Exception ex)
         {
-            FeedHinweis.Text = $"⚠ Feed konnte nicht geladen werden:\n{ex.Message}";
-            FeedHinweis.Visibility = Visibility.Visible;
-            StatusText.Text = "";
+            StatusText.Text = $"⚠ Feed konnte nicht geladen werden: {ex.Message}";
         }
         finally
         {
@@ -424,59 +431,123 @@ public partial class DashboardView : UserControl
         }
     }
 
-    // ---------- Kategorie-Filter (Pillen) ----------
+    // ---------- News-Karten auf dem Board ----------
 
-    /// <summary>Pillen-Zeile neu aufbauen: „Alle" zuerst, dann je eine Pille pro
-    /// Kategorie, die im geladenen Feed tatsächlich vorkommt (feste Reihenfolge).
-    /// Es ist immer genau eine Pille aktiv.</summary>
-    void BaueFilterPillen()
+    /// <summary>Baut für jede Feed-Meldung eine eigene, frei platzierbare Karte.
+    /// Alte News-Karten werden zuvor entfernt; Kalender- und Termine-Karte bleiben.
+    /// Gespeicherte Position/Größe (per URL) hat Vorrang, sonst fließen neue Karten
+    /// an Standardplätze rechts neben den festen Karten.</summary>
+    void ZeigeFeedKarten()
     {
-        FilterLeiste.Children.Clear();
-        if (_feedKarten.Count == 0)
+        for (int i = Board.Children.Count - 1; i >= 0; i--)
+            if (Board.Children[i] is DashCard alt &&
+                alt.CardId.StartsWith("news:", StringComparison.Ordinal))
+                Board.Children.RemoveAt(i);
+
+        for (int i = 0; i < _feedKarten.Count; i++)
         {
-            FilterLeiste.Visibility = Visibility.Collapsed;
-            return;
+            var karte = BaueNewsKarte(_feedKarten[i]);
+            Board.Children.Add(karte);
+            // Standard-Fluss (3 Spalten neben den festen Karten)
+            Canvas.SetLeft(karte, 330 + (i % 3) * 334);
+            Canvas.SetTop(karte, (i / 3) * 224);
+            WendeLayoutAn(karte); // gespeicherte Position/Größe überschreibt den Fluss
         }
-        FilterLeiste.Visibility = Visibility.Visible;
-
-        FilterLeiste.Children.Add(BauePille("alle", FeedKategorien.Alle()));
-        var vorhanden = _feedKarten.Select(k => k.Kategorie).ToHashSet();
-        foreach (var kategorie in FeedKategorien.Reihenfolge.Where(vorhanden.Contains))
-            FilterLeiste.Children.Add(BauePille(kategorie, FeedKategorien.Fuer(kategorie)));
+        Arrangiere(null); // überlappungsfrei einrasten (auch neue News-Karten)
     }
 
-    ToggleButton BauePille(string schluessel, FeedKategorien.Anzeige anzeige)
+    /// <summary>Erzeugt eine News-Karte (Chip, Datum, Titel, Zusammenfassung,
+    /// Domain, „Quelle öffnen"); Klick auf den Inhalt öffnet die URL.</summary>
+    DashCard BaueNewsKarte(FeedKarteVm vm)
     {
-        var pille = new ToggleButton
+        var chip = new Border
         {
-            Content = anzeige.Label,
-            Style = (Style)FindResource("FilterPille"),
-            Foreground = anzeige.Kraeftig,
-            Background = anzeige.Leise,
-            IsChecked = _feedFilter == schluessel,
-            Tag = schluessel,
-            ToolTip = schluessel == "alle"
-                ? "Alle Neuigkeiten zeigen"
-                : "Nur diese Kategorie zeigen",
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(8, 2, 8, 2),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = vm.ChipLeiseBrush,
+            Child = new TextBlock
+            {
+                Text = vm.ChipText,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = vm.ChipTextBrush,
+            },
         };
-        pille.Click += FilterPille_Click;
-        return pille;
-    }
+        var datum = new TextBlock
+        {
+            Text = vm.DatumAnzeige,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        datum.SetResourceReference(TextBlock.ForegroundProperty, "AppTextLeiseBrush");
+        var kopf = new DockPanel();
+        DockPanel.SetDock(datum, Dock.Right);
+        kopf.Children.Add(datum);
+        kopf.Children.Add(chip);
 
-    void FilterPille_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ToggleButton pille || pille.Tag is not string schluessel) return;
-        // Abwählen der aktiven Pille fällt auf „Alle" zurück — so ist immer genau eine aktiv
-        _feedFilter = pille.IsChecked == true ? schluessel : "alle";
-        BaueFilterPillen(); // IsChecked-Zustände aller Pillen neu setzen
-        ZeigeFeedKarten();
-    }
+        var titel = new TextBlock
+        {
+            Text = vm.Titel,
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 10, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var zusammen = new TextBlock
+        {
+            Text = vm.Zusammenfassung,
+            FontSize = 12,
+            Margin = new Thickness(0, 6, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        zusammen.SetResourceReference(TextBlock.ForegroundProperty, "AppTextLeiseBrush");
 
-    /// <summary>Kartenanzeige aus dem gefilterten Bestand neu aufbauen.</summary>
-    void ZeigeFeedKarten() =>
-        FeedListe.ItemsSource = _feedFilter == "alle"
-            ? _feedKarten
-            : _feedKarten.Where(k => k.Kategorie == _feedFilter).ToList();
+        var domain = new TextBlock
+        {
+            Text = vm.Domain,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        domain.SetResourceReference(TextBlock.ForegroundProperty, "AppTextLeiseBrush");
+        var quelle = new TextBlock { Text = "Quelle öffnen ↗", FontSize = 11 };
+        quelle.SetResourceReference(TextBlock.ForegroundProperty, "AppAkzentBrush");
+        var fuss = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        DockPanel.SetDock(domain, Dock.Right);
+        fuss.Children.Add(domain);
+        fuss.Children.Add(quelle);
+
+        var stapel = new StackPanel();
+        stapel.Children.Add(kopf);
+        stapel.Children.Add(titel);
+        stapel.Children.Add(zusammen);
+        stapel.Children.Add(fuss);
+
+        var inhalt = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = stapel,
+            Cursor = Cursors.Hand,
+            DataContext = vm,
+            Background = Brushes.Transparent, // ganze Fläche klickbar
+            ToolTip = vm.Url,
+        };
+        inhalt.MouseLeftButtonUp += FeedKarte_Click;
+
+        var karte = new DashCard
+        {
+            CardId = "news:" + vm.Url,
+            Content = inhalt,
+            Width = 320,
+            Height = 210,
+            MinWidth = 200,
+            MinHeight = 140,
+        };
+        karte.LayoutGeaendert += KarteGeaendert;
+        return karte;
+    }
 
     void FeedKarte_Click(object sender, MouseButtonEventArgs e)
     {
@@ -491,5 +562,172 @@ public partial class DashboardView : UserControl
                 $"Der Link konnte nicht geöffnet werden:\n{ex.Message}",
                 "NotizApp", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    // ---------- Karten-Anordnung (überlappungsfrei) + Speichern/Laden ----------
+
+    const double Raster = 8;   // Einrast-Raster in px
+    const double Luft = 14;    // Mindestabstand zwischen Karten
+
+    /// <summary>Eine Karte wurde verschoben/verkleinert: alles überlappungsfrei
+    /// anordnen (aktive Karte behält Vorrang) und die neue Anordnung speichern.</summary>
+    void KarteGeaendert(DashCard c) => Arrangiere(c, speichern: true);
+
+    /// <summary>Karten so anordnen, dass sie sich nie überlappen: die aktive Karte
+    /// bleibt an ihrem (eingerasteten) Platz, alle anderen weichen nach unten aus
+    /// und rücken dann lückenlos nach oben nach (daneben, sofern horizontal Platz
+    /// ist — sonst darunter). Bewegungen werden sanft animiert.</summary>
+    void Arrangiere(DashCard? aktiv, bool speichern = false)
+    {
+        var karten = Board.Children.OfType<DashCard>().ToList();
+        if (karten.Count == 0) return;
+
+        // Aktive Karte einrasten (Position + Größe)
+        if (aktiv is not null)
+        {
+            Canvas.SetLeft(aktiv, Math.Max(0, Snap(HoleLinks(aktiv))));
+            Canvas.SetTop(aktiv, Math.Max(0, Snap(HoleOben(aktiv))));
+            aktiv.Width = Math.Max(aktiv.MinWidth, Snap(Breite(aktiv)));
+            aktiv.Height = Math.Max(aktiv.MinHeight, Snap(Hoehe(aktiv)));
+        }
+
+        // Reihenfolge: aktive zuerst (Vorrang), dann nach (oben, links)
+        var reihenfolge = new List<DashCard>();
+        if (aktiv is not null) reihenfolge.Add(aktiv);
+        reihenfolge.AddRange(karten.Where(k => k != aktiv)
+            .OrderBy(HoleOben).ThenBy(HoleLinks));
+
+        var ziel = new Dictionary<DashCard, (double x, double y)>();
+
+        // Phase 1: nach unten schieben, bis keine Überlappung mit bereits Platzierten
+        var platziert = new List<DashCard>();
+        foreach (var c in reihenfolge)
+        {
+            double x = Math.Max(0, Snap(HoleLinks(c)));
+            double y = Math.Max(0, Snap(HoleOben(c)));
+            bool geschoben = true;
+            while (geschoben)
+            {
+                geschoben = false;
+                foreach (var p in platziert)
+                {
+                    var (px, py) = ziel[p];
+                    if (HorizUeberlappt(x, Breite(c), px, Breite(p)) &&
+                        y < py + Hoehe(p) + Luft && y + Hoehe(c) + Luft > py)
+                    {
+                        y = py + Hoehe(p) + Luft;
+                        geschoben = true;
+                    }
+                }
+            }
+            ziel[c] = (x, y);
+            platziert.Add(c);
+        }
+
+        // Phase 2: nach oben verdichten (Schwerkraft) — jede Karte auf die
+        // darüberliegenden, horizontal überlappenden Karten aufsetzen
+        var verdichtet = new List<DashCard>();
+        foreach (var c in platziert.OrderBy(p => ziel[p].y).ToList())
+        {
+            double top = 0;
+            foreach (var p in verdichtet)
+                if (HorizUeberlappt(ziel[c].x, Breite(c), ziel[p].x, Breite(p)))
+                    top = Math.Max(top, ziel[p].y + Hoehe(p) + Luft);
+            ziel[c] = (ziel[c].x, top);
+            verdichtet.Add(c);
+        }
+
+        // Anwenden (sanft), Board neu vermessen, ggf. speichern
+        double rechts = 0, unten = 0;
+        foreach (var c in karten)
+        {
+            var (x, y) = ziel[c];
+            AnimiereZu(c, x, y);
+            rechts = Math.Max(rechts, x + Breite(c));
+            unten = Math.Max(unten, y + Hoehe(c));
+        }
+        Board.Width = rechts + 40;
+        Board.Height = unten + 40;
+
+        if (speichern && Einstellungen is not null)
+        {
+            foreach (var c in karten)
+            {
+                var (x, y) = ziel[c];
+                Einstellungen.Aktuell.DashboardLayout[c.CardId] = string.Format(
+                    CultureInfo.InvariantCulture, "{0:0};{1:0};{2:0};{3:0}",
+                    x, y, Breite(c), Hoehe(c));
+            }
+            Einstellungen.Speichere();
+        }
+    }
+
+    /// <summary>Karte weich an ihre Zielposition gleiten lassen (oder direkt setzen,
+    /// wenn Windows-Animationen aus sind).</summary>
+    void AnimiereZu(DashCard c, double x, double y)
+    {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            Canvas.SetLeft(c, x);
+            Canvas.SetTop(c, y);
+            return;
+        }
+        Gleite(c, Canvas.LeftProperty, HoleLinks(c), x);
+        Gleite(c, Canvas.TopProperty, HoleOben(c), y);
+    }
+
+    static void Gleite(DashCard c, DependencyProperty prop, double von, double bis)
+    {
+        if (Math.Abs(von - bis) < 0.5)
+        {
+            c.BeginAnimation(prop, null);
+            c.SetValue(prop, bis);
+            return;
+        }
+        var a = new DoubleAnimation(von, bis, TimeSpan.FromMilliseconds(170))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        a.Completed += (_, _) => { c.BeginAnimation(prop, null); c.SetValue(prop, bis); };
+        c.BeginAnimation(prop, a);
+    }
+
+    static bool HorizUeberlappt(double ax, double aw, double bx, double bw) =>
+        ax < bx + bw && ax + aw > bx;
+
+    double Breite(DashCard c) => double.IsNaN(c.Width) ? c.ActualWidth : c.Width;
+    double Hoehe(DashCard c) => double.IsNaN(c.Height) ? c.ActualHeight : c.Height;
+    static double Snap(double v) => Math.Round(v / Raster) * Raster;
+
+    /// <summary>Gespeichertes Layout einer Karte anwenden (falls vorhanden),
+    /// sonst bleibt die zuvor gesetzte Standardposition/-größe erhalten.</summary>
+    void WendeLayoutAn(DashCard c)
+    {
+        if (Einstellungen is null) return;
+        if (!Einstellungen.Aktuell.DashboardLayout.TryGetValue(c.CardId, out var s)) return;
+        var teile = s.Split(';');
+        if (teile.Length < 4) return;
+        if (double.TryParse(teile[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
+            double.TryParse(teile[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y) &&
+            double.TryParse(teile[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var breite) &&
+            double.TryParse(teile[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var hoehe))
+        {
+            Canvas.SetLeft(c, Math.Max(0, x));
+            Canvas.SetTop(c, Math.Max(0, y));
+            c.Width = Math.Max(c.MinWidth, breite);
+            c.Height = Math.Max(c.MinHeight, hoehe);
+        }
+    }
+
+    static double HoleLinks(UIElement e)
+    {
+        var v = Canvas.GetLeft(e);
+        return double.IsNaN(v) ? 0 : v;
+    }
+
+    static double HoleOben(UIElement e)
+    {
+        var v = Canvas.GetTop(e);
+        return double.IsNaN(v) ? 0 : v;
     }
 }

@@ -1,6 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using NotizApp.Models;
 using NotizApp.Services;
@@ -66,6 +70,7 @@ public partial class MainWindow : Window
         // Dieselbe KiService-Instanz für Chat und Dashboard-Feed (Editor.Ki
         // wurde gerade eben gesetzt — Reihenfolge beachten)
         Dashboard.Ki = Editor.Ki;
+        Dashboard.Einstellungen = settings;
         Dashboard.NotizGeklickt += DashboardNotizGeklickt;
         Dashboard.TerminAnlegenAngefordert += DashboardTerminAnlegen;
 
@@ -81,6 +86,8 @@ public partial class MainWindow : Window
         VolumenstromTool.ErgebnisEinfuegen += ChatTextEinfuegen;
         WasserinhaltTool.ErgebnisEinfuegen += ChatTextEinfuegen;
         AusdehnungTool.ErgebnisEinfuegen += ChatTextEinfuegen;
+        GeraetewissenTool.ErgebnisEinfuegen += ChatTextEinfuegen;
+        GeraetewissenTool.Einstellungen = settings;
 
         _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _autosaveTimer.Tick += (_, _) => { _autosaveTimer.Stop(); SpeichereAktuelle(); };
@@ -88,7 +95,14 @@ public partial class MainWindow : Window
         BaueNeueNotizMenu();
         NotizListe.ContextMenuOpening += NotizListe_ContextMenuOpening;
 
-        Loaded += (_, _) => StarteGlowAnimation();
+        SetzeRauschTextur();
+
+        Loaded += (_, _) =>
+        {
+            ErzeugeUndStartePartikel();
+            Animationen.Pulsieren(ChatBubble); // sanft „atmende" Chat-Bubble
+        };
+        SizeChanged += Partikel_FensterGroesse;
 
         NotizbuchFarben.Setze(settings.Aktuell.NotizbuchFarben);
         AktualisiereSidebar();
@@ -224,7 +238,8 @@ public partial class MainWindow : Window
     /// <summary>Werkzeug-Ansichten in der Reihenfolge der WERKZEUGE-Liste
     /// (Index = Listeneintrag). Bei neuem Tool hier und in der Liste ergänzen.</summary>
     UIElement[] Werkzeuge => new UIElement[]
-        { HeizlastTool, VolumenstromTool, WasserinhaltTool, AusdehnungTool, UmrechnerTool };
+        { HeizlastTool, VolumenstromTool, WasserinhaltTool, AusdehnungTool, UmrechnerTool,
+          GeraetewissenTool };
 
     /// <summary>Auswahl in der WERKZEUGE-Liste: das gewählte Tool über den Editor legen.</summary>
     void WerkzeugListe_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -249,6 +264,9 @@ public partial class MainWindow : Window
         for (int i = 0; i < tools.Length; i++)
             tools[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
         Editor.Visibility = _werkzeugAnsicht ? Visibility.Collapsed : Visibility.Visible;
+        if (index >= 0 && tools[index] is FrameworkElement tool)
+            Animationen.EinblendenGleiten(tool);
+        else if (index < 0 && _aktuelleNotiz is not null) Animationen.Einblenden(Editor);
         ZeigeEditorHinweis();
     }
 
@@ -660,6 +678,7 @@ public partial class MainWindow : Window
         _aktuelleNotiz = note;
         _store.LadeTinte(note);
         Editor.LadeNote(note);
+        if (Editor.Visibility == Visibility.Visible) Animationen.EinblendenGleiten(Editor);
         ZeigeEditorHinweis();
     }
 
@@ -693,11 +712,14 @@ public partial class MainWindow : Window
         });
     }
 
-    void ZeigeEditorHinweis() =>
+    void ZeigeEditorHinweis()
+    {
         // Im Dashboard keinen „Keine Notiz"-Hinweis über die Ansicht legen
-        EditorLeerHinweis.Visibility =
-            _aktuelleNotiz is null && !_dashboardAnsicht && !_werkzeugAnsicht
-                ? Visibility.Visible : Visibility.Collapsed;
+        bool zeigen = _aktuelleNotiz is null && !_dashboardAnsicht && !_werkzeugAnsicht;
+        bool wurdeVerborgen = EditorLeerHinweis.Visibility != Visibility.Visible;
+        EditorLeerHinweis.Visibility = zeigen ? Visibility.Visible : Visibility.Collapsed;
+        if (zeigen && wurdeVerborgen) Animationen.EinblendenGleiten(EditorLeerHinweis);
+    }
 
     // ---------- Dashboard ----------
 
@@ -712,6 +734,8 @@ public partial class MainWindow : Window
         _dashboardAnsicht = an;
         Dashboard.Visibility = an ? Visibility.Visible : Visibility.Collapsed;
         Editor.Visibility = an ? Visibility.Collapsed : Visibility.Visible;
+        if (an) Animationen.EinblendenGleiten(Dashboard);
+        else if (_aktuelleNotiz is not null) Animationen.Einblenden(Editor);
         ZeigeEditorHinweis();
         if (an)
         {
@@ -757,7 +781,7 @@ public partial class MainWindow : Window
         var note = _store.Notizen.FirstOrDefault(n => n.Meta.Titel == KalenderNotizTitel);
         if (note is null)
         {
-            note = _store.Neu("Eingang", "leer");
+            note = _store.Neu(NoteStore.StandardNotizbuch, "leer");
             note.Meta.Titel = KalenderNotizTitel;
         }
 
@@ -809,7 +833,7 @@ public partial class MainWindow : Window
 
     void ErstelleNotiz(string vorlage)
     {
-        var notizbuch = _filterNotizbuch ?? "Eingang";
+        var notizbuch = _filterNotizbuch ?? NoteStore.StandardNotizbuch;
         var note = _store.Neu(notizbuch, vorlage);
         AktualisiereSidebar();
         AktualisiereListe();
@@ -913,48 +937,147 @@ public partial class MainWindow : Window
         _chatOffen = an;
         if (an)
         {
-            ChatSpalte.MinWidth = 300;
-            ChatSpalte.Width = new GridLength(Math.Max(300, _settings.Aktuell.ChatBreite));
+            double ziel = Math.Max(300, _settings.Aktuell.ChatBreite);
+            ChatPanel.Visibility = Visibility.Visible;
+            SplitterChat.Visibility = Visibility.Visible;
+            ChatSpalte.MinWidth = 0; // während der Animation nicht klemmen
+            Animationen.SpaltenBreite(ChatSpalte, 0, ziel,
+                fertig: () => ChatSpalte.MinWidth = 300);
         }
         else
         {
             if (ChatSpalte.Width.Value > 0)
                 _settings.Aktuell.ChatBreite = ChatSpalte.Width.Value;
+            double von = ChatSpalte.Width.Value;
             ChatSpalte.MinWidth = 0;
-            ChatSpalte.Width = new GridLength(0);
+            Animationen.SpaltenBreite(ChatSpalte, von, 0, fertig: () =>
+            {
+                ChatPanel.Visibility = Visibility.Collapsed;
+                SplitterChat.Visibility = Visibility.Collapsed;
+            });
         }
-        ChatPanel.Visibility = an ? Visibility.Visible : Visibility.Collapsed;
-        SplitterChat.Visibility = an ? Visibility.Visible : Visibility.Collapsed;
         _settings.Aktuell.ChatOffen = an;
         _settings.Speichere();
     }
 
     void ChatBubble_Click(object sender, RoutedEventArgs e) => SetzeChatSichtbar(!_chatOffen);
 
-    // ---------- Hintergrund-Animation („Kupfer & Wasser") ----------
+    // ---------- Ambient-Hintergrund („Kupfer & Wasser") ----------
 
-    /// <summary>Die zwei Licht-Schimmer sehr langsam treiben lassen — dezent,
-    /// GPU-günstig (nur Positions-Animationen) und aus, wenn Windows
-    /// Animationen deaktiviert hat.</summary>
-    void StarteGlowAnimation()
+    /// <summary>Feine, gekachelte Graustufen-Rausch-Textur erzeugen und über die
+    /// Ambient-Ebene legen — dithert das Verlaufs-Banding weg (fester Seed → stabil,
+    /// einmalig erzeugt, keine laufende GPU-Last).</summary>
+    void SetzeRauschTextur()
     {
+        const int n = 160;
+        var wb = new WriteableBitmap(n, n, 96, 96, PixelFormats.Bgra32, null);
+        var px = new byte[n * n * 4];
+        var rnd = new Random(12345);
+        for (int i = 0; i < px.Length; i += 4)
+        {
+            byte v = (byte)rnd.Next(0, 256);
+            px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 255;
+        }
+        wb.WritePixels(new Int32Rect(0, 0, n, n), px, n * 4, 0);
+        wb.Freeze();
+        NebelRausch.Fill = new ImageBrush(wb)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, n, n),
+            ViewportUnits = BrushMappingMode.Absolute,
+        };
+    }
+
+
+    readonly List<Ellipse> _partikel = new();
+    DispatcherTimer? _partikelNeuTimer;
+    double _partikelBreite, _partikelHoehe;
+
+    /// <summary>Schwebende Licht-Partikel („Motes") erzeugen und animieren — kleine,
+    /// weich glimmende Punkte in den Wasser-/Kupfer-Tönen auf dem tiefdunklen Grund.
+    /// Jeder driftet langsam und funkelt (Deckkraft) mit eigener Periode → ruhiger,
+    /// „mystischer" Nebel statt generischer Radial-Lichtquellen.</summary>
+    void ErzeugeUndStartePartikel()
+    {
+        double w = ActualWidth > 0 ? ActualWidth : 1240;
+        double h = ActualHeight > 0 ? ActualHeight : 760;
+        _partikelBreite = w;
+        _partikelHoehe = h;
+
+        PartikelEbene.Children.Clear();
+        _partikel.Clear();
+
+        var rnd = new Random();
+        string[] toene = { "#3FB9D3", "#48C7C0", "#7FD8E6", "#DE9159", "#A9F0E6", "#5FA9C4" };
+        int anzahl = Math.Clamp((int)(w * h / 26000), 26, 60);
+
+        for (int i = 0; i < anzahl; i++)
+        {
+            double kern = 2 + rnd.NextDouble() * 5;
+            double glow = kern * (4 + rnd.NextDouble() * 3);
+            var f = (Color)ColorConverter.ConvertFromString(toene[rnd.Next(toene.Length)]);
+
+            var pinsel = new RadialGradientBrush();
+            pinsel.GradientStops.Add(new GradientStop(Color.FromArgb(235, f.R, f.G, f.B), 0));
+            pinsel.GradientStops.Add(new GradientStop(Color.FromArgb(90, f.R, f.G, f.B), 0.4));
+            pinsel.GradientStops.Add(new GradientStop(Color.FromArgb(0, f.R, f.G, f.B), 1));
+            pinsel.Freeze();
+
+            var e = new Ellipse
+            {
+                Width = glow,
+                Height = glow,
+                Fill = pinsel,
+                IsHitTestVisible = false,
+                Opacity = 0.15 + rnd.NextDouble() * 0.5,
+                RenderTransform = new TranslateTransform(),
+            };
+            Canvas.SetLeft(e, rnd.NextDouble() * w - glow / 2);
+            Canvas.SetTop(e, rnd.NextDouble() * h - glow / 2);
+            PartikelEbene.Children.Add(e);
+            _partikel.Add(e);
+        }
+
         if (!SystemParameters.ClientAreaAnimation) return;
 
-        static System.Windows.Media.Animation.DoubleAnimation Treiben(
-            double von, double bis, int sekunden) => new(von, bis, TimeSpan.FromSeconds(sekunden))
-        {
-            AutoReverse = true,
-            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
-            EasingFunction = new System.Windows.Media.Animation.SineEase
+        static DoubleAnimation Drift(double von, double bis, double sek, bool auto = true) =>
+            new(von, bis, TimeSpan.FromSeconds(sek))
             {
-                EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut,
-            },
-        };
+                AutoReverse = auto,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+            };
 
-        GlowWasser.BeginAnimation(Canvas.LeftProperty, Treiben(-280, 40, 55));
-        GlowWasser.BeginAnimation(Canvas.TopProperty, Treiben(-320, -120, 70));
-        GlowKupfer.BeginAnimation(Canvas.RightProperty, Treiben(-240, -40, 65));
-        GlowKupfer.BeginAnimation(Canvas.BottomProperty, Treiben(-280, -90, 50));
+        foreach (var e in _partikel)
+        {
+            var t = (TranslateTransform)e.RenderTransform;
+            double ax = (rnd.NextDouble() * 2 - 1) * (40 + rnd.NextDouble() * 150);
+            double ay = (rnd.NextDouble() * 2 - 1) * (40 + rnd.NextDouble() * 150);
+            t.BeginAnimation(TranslateTransform.XProperty, Drift(0, ax, 34 + rnd.NextDouble() * 50));
+            t.BeginAnimation(TranslateTransform.YProperty, Drift(0, ay, 34 + rnd.NextDouble() * 50));
+            double basis = e.Opacity;
+            e.BeginAnimation(OpacityProperty, Drift(basis * 0.2, basis, 3 + rnd.NextDouble() * 8));
+        }
+    }
+
+    /// <summary>Bei deutlicher Fenstergrößenänderung das Partikelfeld neu erzeugen
+    /// (entprellt), damit es die ganze Fläche füllt.</summary>
+    void Partikel_FensterGroesse(object sender, SizeChangedEventArgs e)
+    {
+        if (Math.Abs(ActualWidth - _partikelBreite) < 160 &&
+            Math.Abs(ActualHeight - _partikelHoehe) < 160)
+            return;
+        _partikelNeuTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _partikelNeuTimer.Tick -= PartikelNeu_Tick;
+        _partikelNeuTimer.Tick += PartikelNeu_Tick;
+        _partikelNeuTimer.Stop();
+        _partikelNeuTimer.Start();
+    }
+
+    void PartikelNeu_Tick(object? sender, EventArgs e)
+    {
+        _partikelNeuTimer?.Stop();
+        ErzeugeUndStartePartikel();
     }
 
     void ChatTextEinfuegen(string text)

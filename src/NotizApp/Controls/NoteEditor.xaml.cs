@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -64,6 +65,7 @@ public partial class NoteEditor : UserControl
     // Zuletzt bearbeitetes Textfeld — Ziel für Farb-/Schriftwahl aus der Werkzeugleiste
     TextElementVm? _aktivesTextfeld;
     bool _schriftSync; // Guard: SchriftBox wird programmatisch gesetzt
+    bool _groesseSync; // Guard: SchriftGroesseBox wird programmatisch gesetzt
     const string SchriftStandard = "(Standard)";
 
     public NoteEditor()
@@ -827,6 +829,12 @@ public partial class NoteEditor : UserControl
                      .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase))
             SchriftBox.Items.Add(name);
         SchriftBox.SelectedItem = SchriftStandard;
+
+        _groesseSync = true;
+        foreach (var g in new[] { 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 72 })
+            SchriftGroesseBox.Items.Add(g.ToString());
+        SchriftGroesseBox.Text = TextElementVm.GroesseStandard.ToString(CultureInfo.InvariantCulture);
+        _groesseSync = false;
         _schriftSync = false;
     }
 
@@ -841,6 +849,11 @@ public partial class NoteEditor : UserControl
             !string.IsNullOrWhiteSpace(vm.Schrift) && SchriftBox.Items.Contains(vm.Schrift)
                 ? vm.Schrift : SchriftStandard;
         _schriftSync = false;
+
+        _groesseSync = true;
+        SchriftGroesseBox.Text = ((int)Math.Round(vm.SchriftGroesse))
+            .ToString(CultureInfo.InvariantCulture);
+        _groesseSync = false;
     }
 
     /// <summary>Schrift-Auswahl geändert → auf das aktive Textfeld anwenden.</summary>
@@ -852,6 +865,31 @@ public partial class NoteEditor : UserControl
             wahl == SchriftStandard || string.IsNullOrEmpty(wahl) ? null : wahl;
     }
 
+    /// <summary>Größen-Auswahl aus der Liste gewählt → auf das aktive Textfeld anwenden.</summary>
+    void SchriftGroesse_Changed(object sender, SelectionChangedEventArgs e) => WendeGroesseAn();
+
+    /// <summary>Enter im Größen-Feld übernimmt den getippten Wert.</summary>
+    void SchriftGroesse_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) WendeGroesseAn();
+    }
+
+    /// <summary>Feld verlassen → getippten Wert übernehmen.</summary>
+    void SchriftGroesse_LostFocus(object sender, RoutedEventArgs e) => WendeGroesseAn();
+
+    /// <summary>Größe aus dem Eingabefeld lesen und auf das aktive Textfeld anwenden.</summary>
+    void WendeGroesseAn()
+    {
+        if (_groesseSync || _aktivesTextfeld is null) return;
+        var text = SchriftGroesseBox.Text?.Trim().Replace(',', '.');
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var wert))
+            return;
+        wert = Math.Clamp(wert, 6, 200);
+        // Standardgröße → nichts speichern (null), sonst den Wert
+        _aktivesTextfeld.Groesse =
+            Math.Abs(wert - TextElementVm.GroesseStandard) < 0.01 ? null : wert;
+    }
+
     /// <summary>Kein Textfeld mehr im Fokus für Farbe/Schrift (z.B. Zeichenwerkzeug gewählt).</summary>
     void VergissTextfeld()
     {
@@ -859,6 +897,11 @@ public partial class NoteEditor : UserControl
         _schriftSync = true;
         if (SchriftBox is not null) SchriftBox.SelectedItem = SchriftStandard;
         _schriftSync = false;
+        _groesseSync = true;
+        if (SchriftGroesseBox is not null)
+            SchriftGroesseBox.Text =
+                TextElementVm.GroesseStandard.ToString(CultureInfo.InvariantCulture);
+        _groesseSync = false;
     }
 
     Color AktuelleFarbe() => _farbe == "auto"

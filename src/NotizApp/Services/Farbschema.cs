@@ -45,14 +45,44 @@ public static class Farbschema
         Brush(ziel, "AppAkzentLeiseBrush", dunkel ? "#223FB9D3" : "#170E7490");
         Brush(ziel, "AppKupferBrush", dunkel ? "#DE9159" : "#C0703C");
 
-        // Treibende Licht-Schimmer im Fenster-Hintergrund
+        // Treibende Licht-Schimmer im Fenster-Hintergrund (Ambient-Ebene)
         Glow(ziel, "AppGlowWasserBrush", dunkel ? "#2FA9C4" : "#0E7490", dunkel ? 0.16 : 0.11);
         Glow(ziel, "AppGlowKupferBrush", dunkel ? "#D98A54" : "#C67A44", dunkel ? 0.13 : 0.09);
+        Glow(ziel, "AppGlowMintBrush", dunkel ? "#48C7C0" : "#2A93A6", dunkel ? 0.11 : 0.07);
 
         // Firmen-Artwork hinter allem: im Dunkeln verschmilzt das Navy mit dem
         // Fond (etwas präsenter ok), im Hellen nur ein Hauch, sonst wirkt es trüb
         ziel["AppFondBildOpazitaet"] = dunkel ? 0.12 : 0.05;
+
+        // Mystischer, tiefdunkler Grund (opak): im Dunkeln fast schwarz mit ruhigem
+        // Diagonal-Verlauf für Tiefe; im Hellen ein sehr helles, ruhiges Grau.
+        GrundVerlauf(ziel, dunkel);
     }
+
+    /// <summary>Vollflächiger Hintergrund-Verlauf hinter der Partikel-Ebene.</summary>
+    static void GrundVerlauf(ResourceDictionary ziel, bool dunkel)
+    {
+        var b = new LinearGradientBrush
+        {
+            StartPoint = new Point(0.15, 0),
+            EndPoint = new Point(0.85, 1),
+        };
+        if (dunkel)
+        {
+            b.GradientStops.Add(new GradientStop(Farbe("#0E1519"), 0));
+            b.GradientStops.Add(new GradientStop(Farbe("#080B0D"), 0.55));
+            b.GradientStops.Add(new GradientStop(Farbe("#040607"), 1));
+        }
+        else
+        {
+            b.GradientStops.Add(new GradientStop(Farbe("#F7FAFB"), 0));
+            b.GradientStops.Add(new GradientStop(Farbe("#ECF1F3"), 1));
+        }
+        b.Freeze();
+        ziel["AppGrundBrush"] = b;
+    }
+
+    static Color Farbe(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 
     static void Brush(ResourceDictionary ziel, string key, string hex)
     {
@@ -61,13 +91,19 @@ public static class Farbschema
         ziel[key] = b;
     }
 
-    /// <summary>Weicher radialer Schimmer: Akzentfarbe außen in Transparenz derselben Farbe.</summary>
+    /// <summary>Weicher radialer Schimmer für die Ambient-Ebene. Mehrere Stops mit
+    /// gauß-ähnlicher Alpha-Abnahme — glatter Verlauf ohne sichtbare Ringe (Banding).</summary>
     static void Glow(ResourceDictionary ziel, string key, string hex, double staerke)
     {
         var c = (Color)ColorConverter.ConvertFromString(hex);
-        var innen = Color.FromArgb((byte)(staerke * 255), c.R, c.G, c.B);
-        var aussen = Color.FromArgb(0, c.R, c.G, c.B);
-        var b = new RadialGradientBrush(innen, aussen);
+        var b = new RadialGradientBrush();
+        (double pos, double a)[] stops =
+        {
+            (0.0, 1.0), (0.25, 0.72), (0.45, 0.46), (0.65, 0.24), (0.82, 0.09), (1.0, 0.0),
+        };
+        foreach (var (pos, a) in stops)
+            b.GradientStops.Add(new GradientStop(
+                Color.FromArgb((byte)(staerke * a * 255), c.R, c.G, c.B), pos));
         b.Freeze();
         ziel[key] = b;
     }

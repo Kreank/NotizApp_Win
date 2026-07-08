@@ -128,6 +128,27 @@ public class TextElementVm : ElementVm
     public FontFamily SchriftFamily =>
         string.IsNullOrWhiteSpace(_schrift) ? new FontFamily("Segoe UI") : new FontFamily(_schrift);
 
+    /// <summary>Standard-Schriftgröße der Textfelder (px).</summary>
+    public const double GroesseStandard = 14;
+
+    double? _groesse;
+    /// <summary>Schriftgröße in px, null = Standardgröße.</summary>
+    public double? Groesse
+    {
+        get => _groesse;
+        set
+        {
+            if (_groesse == value) return;
+            _groesse = value;
+            OnChanged();
+            OnChanged(nameof(SchriftGroesse));
+            MeldeGeaendert();
+        }
+    }
+
+    /// <summary>Effektive Schriftgröße für die TextBox (Standard, wenn nichts gesetzt ist).</summary>
+    public double SchriftGroesse => _groesse ?? GroesseStandard;
+
     /// <summary>Tatsächlich gerenderte Höhe (setzt der Editor nach dem Layout) — nur fürs Mitwachsen.</summary>
     public double AnzeigeHoehe { get; set; } = 28;
 
@@ -140,11 +161,12 @@ public class TextElementVm : ElementVm
         _text = el.Text;
         _farbe = el.Farbe;
         _schrift = el.Schrift;
+        _groesse = el.Groesse;
     }
 
     public override NoteElement ZuModel()
     {
-        var el = new TextElement { Text = Text, Farbe = Farbe, Schrift = Schrift };
+        var el = new TextElement { Text = Text, Farbe = Farbe, Schrift = Schrift, Groesse = Groesse };
         UebernehmePosition(el);
         return el;
     }

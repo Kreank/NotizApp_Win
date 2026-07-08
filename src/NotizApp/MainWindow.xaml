@@ -62,25 +62,18 @@
             <ColumnDefinition x:Name="ChatSpalte" Width="0"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Firmen-Artwork als Hauch hinter allem; die Licht-Schimmer treiben darüber.
-             Deckkraft je Design aus dem Farbschema (dunkel etwas präsenter als hell). -->
-        <Image Grid.ColumnSpan="7" IsHitTestVisible="False"
-               Source="pack://application:,,,/Assets/hintergrund-mitra.png"
-               Stretch="UniformToFill"
-               Opacity="{DynamicResource AppFondBildOpazitaet}"/>
+        <!-- Mystischer, tiefdunkler Grund (opak, Verlauf aus dem Farbschema) -->
+        <Rectangle x:Name="DunkelGrund" Grid.ColumnSpan="7" IsHitTestVisible="False"
+                   Fill="{DynamicResource AppGrundBrush}"/>
 
-        <!-- „Kupfer & Wasser": zwei sehr langsam treibende Licht-Schimmer hinter
-             allen Inhalten (Animation startet im Code-Behind, respektiert die
-             Windows-Animationseinstellung) -->
-        <Canvas x:Name="GlowEbene" Grid.ColumnSpan="7" IsHitTestVisible="False"
-                ClipToBounds="True">
-            <Ellipse x:Name="GlowWasser" Width="820" Height="820"
-                     Canvas.Left="-280" Canvas.Top="-320"
-                     Fill="{DynamicResource AppGlowWasserBrush}"/>
-            <Ellipse x:Name="GlowKupfer" Width="680" Height="680"
-                     Canvas.Right="-240" Canvas.Bottom="-280"
-                     Fill="{DynamicResource AppGlowKupferBrush}"/>
-        </Canvas>
+        <!-- Schwebende Licht-Partikel (glimmende „Motes"): im Code-Behind erzeugt
+             und animiert (Drift + Funkeln), respektiert die Windows-Animationseinstellung -->
+        <Canvas x:Name="PartikelEbene" Grid.ColumnSpan="7" IsHitTestVisible="False"
+                ClipToBounds="True"/>
+
+        <!-- Feiner Rausch-Dither: subtiler Film-Grain, glättet Verläufe (kein Banding) -->
+        <Rectangle x:Name="NebelRausch" Grid.ColumnSpan="7" IsHitTestVisible="False"
+                   Opacity="0.03"/>
 
         <!-- ===== Sidebar ===== -->
         <DockPanel x:Name="SidebarPanel" Grid.Column="0" Margin="10,10,4,10">
@@ -120,6 +113,7 @@
                     <ListBoxItem Content="🌊 Wasserinhalt"/>
                     <ListBoxItem Content="🎈 Ausdehnungsgefäß"/>
                     <ListBoxItem Content="🔄 Einheiten-Umrechner"/>
+                    <ListBoxItem Content="🔎 Gerätewissen"/>
                 </ListBox>
             </StackPanel>
 
@@ -272,7 +266,7 @@
         <!-- ===== Editor ===== -->
         <Grid Grid.Column="4">
             <controls:NoteEditor x:Name="Editor"/>
-            <TextBlock x:Name="EditorLeerHinweis"
+            <TextBlock x:Name="EditorLeerHinweis" IsHitTestVisible="False"
                        Text="Keine Notiz ausgewählt.&#10;&#10;＋ Neue Notiz (Strg+N) oder links eine Notiz wählen."
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextAlignment="Center" Opacity="0.5"/>
@@ -287,6 +281,7 @@
             <controls:WasserinhaltRechner x:Name="WasserinhaltTool" Visibility="Collapsed"/>
             <controls:AusdehnungsgefaessRechner x:Name="AusdehnungTool" Visibility="Collapsed"/>
             <controls:EinheitenUmrechner x:Name="UmrechnerTool" Visibility="Collapsed"/>
+            <controls:GeraetewissenTool x:Name="GeraetewissenTool" Visibility="Collapsed"/>
 
             <!-- Schwebende Chat-Bubble: immer erreichbar, auch ohne offene Notiz -->
             <Button x:Name="ChatBubble" Width="46" Height="46"

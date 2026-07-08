@@ -10,7 +10,7 @@ public class AppSettings
     public bool HotkeyEnabled { get; set; } = true;
     public bool Autostart { get; set; } = false;
     /// <summary>Ziel-Notizbuch für die Schnellerfassung.</summary>
-    public string QuickNotebook { get; set; } = "Kunden-Anrufe";
+    public string QuickNotebook { get; set; } = NoteStore.StandardNotizbuch;
     /// <summary>Linke Seitenleiste (Notizbücher/Tags) eingeklappt.</summary>
     public bool SidebarZu { get; set; }
     /// <summary>Mittlere Spalte (Suche/Notizliste) eingeklappt.</summary>
@@ -21,6 +21,15 @@ public class AppSettings
     public double ChatBreite { get; set; } = 380;
     /// <summary>Farbe je Notizbuch (Name → Hex "#RRGGBB").</summary>
     public Dictionary<string, string> NotizbuchFarben { get; set; } = new();
+    /// <summary>Dashboard-Card-Anordnung: Card-ID → "x;y;breite;hoehe".
+    /// Kalender/Termine über feste IDs, News-Cards über die URL.</summary>
+    public Dictionary<string, string> DashboardLayout { get; set; } = new();
+
+    /// <summary>Gerätewissen: Such-Endpunkt der Wissensbasis (liefert JSON).</summary>
+    public string GeraetewissenUrl { get; set; } = "https://ki.tech-artist.de/wissen/vaillant/suche";
+    /// <summary>Gerätewissen: API-Key (Header „X-Api-Key"). Leer im Quellcode (kein
+    /// Secret im öffentlichen Repo) — wird lokal in der settings.json hinterlegt.</summary>
+    public string GeraetewissenApiKey { get; set; } = "";
 }
 
 /// <summary>

@@ -210,6 +210,8 @@ public static partial class Frontmatter
                     {
                         Farbe = attrs.TryGetValue("farbe", out var f) && f.Length > 0 ? f : null,
                         Schrift = attrs.TryGetValue("schrift", out var s) && s.Length > 0 ? s : null,
+                        Groesse = attrs.TryGetValue("groesse", out var g) &&
+                            double.TryParse(g, CultureInfo.InvariantCulture, out var gv) ? gv : null,
                     },
                     "bild" => new BildElement
                     {
@@ -508,6 +510,8 @@ public static partial class Frontmatter
                         sb.Append($" farbe={t.Farbe}");
                     if (!string.IsNullOrWhiteSpace(t.Schrift))
                         sb.Append($" schrift=\"{t.Schrift}\"");
+                    if (t.Groesse is { } gr)
+                        sb.Append($" groesse={gr.ToString(CultureInfo.InvariantCulture)}");
                     sb.Append("-->\n");
                     sb.Append(t.Text.Replace("\r\n", "\n").TrimEnd('\n'));
                     sb.Append("\n\n");

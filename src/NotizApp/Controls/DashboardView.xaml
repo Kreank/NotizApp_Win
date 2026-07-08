@@ -3,40 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:NotizApp.Controls">
     <UserControl.Resources>
-        <!-- Filter-Pille über den Feed-Karten: abgerundet, leiser Farbhintergrund
-             + Text in der Kategoriefarbe (Farben setzt FeedKategorien im Code);
-             die aktive Pille bekommt einen 1px-Rand in der Kategoriefarbe -->
-        <Style x:Key="FilterPille" TargetType="ToggleButton">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="10,3"/>
-            <Setter Property="Margin" Value="0,0,6,6"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Huelle" CornerRadius="10"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="Transparent"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Huelle" Property="BorderBrush"
-                                        Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Huelle" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <!-- Rahmenloser, dezenter Button (Kalender-Navigation, Feed aktualisieren) -->
         <Style x:Key="LeiserButton" TargetType="Button">
             <Setter Property="BorderThickness" Value="0"/>
@@ -52,45 +18,110 @@
             <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
+
+        <!-- ===== Frei platzierbare Dashboard-Karte =====
+             Äußerer Rahmen + ContentPresenter (14,26,14,14: oben Platz für die
+             Ziehleiste). PART_Move = obere Ziehleiste (⠿), PART_Resize = Griff
+             unten rechts. Griffe werden erst beim Überfahren der Karte sichtbar;
+             der Rand wechselt dann in die Akzentfarbe. -->
+        <Style TargetType="local:DashCard">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="local:DashCard">
+                        <Border x:Name="Rahmen" CornerRadius="14" ClipToBounds="True"
+                                Background="{DynamicResource AppFlaecheBrush}"
+                                BorderBrush="{DynamicResource AppRandBrush}"
+                                BorderThickness="1">
+                            <Grid>
+                                <ContentPresenter Margin="14,26,14,14"/>
+
+                                <!-- Obere Ziehleiste: verschiebt die Karte -->
+                                <Thumb x:Name="PART_Move" VerticalAlignment="Top"
+                                       HorizontalAlignment="Stretch" Height="22"
+                                       Cursor="SizeAll">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border Background="Transparent">
+                                                <TextBlock x:Name="Punkte" Text="⠿" FontSize="12"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" Opacity="0.25"
+                                                           Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Punkte" Property="Opacity" Value="1"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+
+                                <!-- Griff unten rechts: verändert die Größe -->
+                                <Thumb x:Name="PART_Resize" Width="16" Height="16"
+                                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                       Cursor="SizeNWSE" Opacity="0">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border Background="Transparent">
+                                                <!-- dezentes Eck-Dreieck -->
+                                                <Path Data="M 14,3 L 14,14 L 3,14 Z"
+                                                      Fill="{DynamicResource AppTextLeiseBrush}"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Rahmen" Property="BorderBrush"
+                                        Value="{DynamicResource AppAkzentBrush}"/>
+                                <Setter TargetName="PART_Resize" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
-        <StackPanel Margin="24">
+    <Grid Margin="24,24,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-            <!-- ===== Kopfzeile: Begrüßung + Datum, rechts Feed-Aktualisierung ===== -->
-            <DockPanel Margin="0,0,0,24">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
-                            VerticalAlignment="Top">
-                    <TextBlock x:Name="StatusText" FontSize="11" Margin="0,0,8,0"
-                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                               MaxWidth="260"
-                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                    <Button x:Name="FeedButton" Content="⟳ Feed aktualisieren" FontSize="12"
-                            Style="{StaticResource LeiserButton}"
-                            ToolTip="Neuigkeiten neu recherchieren (Claude — dauert einige Minuten)"
-                            Click="FeedAktualisieren_Click"/>
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock x:Name="BegruessungText" FontSize="28" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="DatumText" FontSize="13" Margin="0,4,0,0"
-                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                </StackPanel>
-            </DockPanel>
+        <!-- ===== Kopfzeile: Begrüßung + Datum, rechts Feed-Status/-Aktualisierung ===== -->
+        <DockPanel Grid.Row="0" Margin="0,0,24,16">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                        VerticalAlignment="Top">
+                <TextBlock x:Name="StatusText" FontSize="11" Margin="0,0,8,0"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           MaxWidth="320"
+                           Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                <Button x:Name="FeedButton" Content="⟳ Feed aktualisieren" FontSize="12"
+                        Style="{StaticResource LeiserButton}"
+                        ToolTip="Neuigkeiten neu recherchieren (Claude — dauert einige Minuten)"
+                        Click="FeedAktualisieren_Click"/>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock x:Name="BegruessungText" FontSize="28" FontWeight="SemiBold"/>
+                <TextBlock x:Name="DatumText" FontSize="13" Margin="0,4,0,0"
+                           Foreground="{DynamicResource AppTextLeiseBrush}"/>
+            </StackPanel>
+        </DockPanel>
 
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="KalenderSpalte" Width="320" MinWidth="240"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*" MinWidth="300"/>
-                </Grid.ColumnDefinitions>
+        <!-- ===== Freie Fläche: alle Karten liegen frei auf dem Board ===== -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto" Padding="0,0,24,24">
+            <Canvas x:Name="Board">
 
-                <!-- ===== Links: Monatskalender + Terminliste ===== -->
-                <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                    <Border CornerRadius="12" Padding="14" BorderThickness="1"
-                            Background="{DynamicResource AppFlaecheBrush}"
-                            BorderBrush="{DynamicResource AppRandBrush}">
-                        <StackPanel>
+                <!-- Kalender-Karte: Inhalt skaliert mit der Kartengröße (Viewbox) -->
+                <local:DashCard x:Name="KalenderKarte" CardId="kalender"
+                                Canvas.Left="0" Canvas.Top="0" Width="300" Height="360"
+                                MinWidth="240" MinHeight="260">
+                    <Viewbox Stretch="Uniform" StretchDirection="Both">
+                        <StackPanel Width="272">
                             <DockPanel Margin="0,0,0,8">
                                 <Button DockPanel.Dock="Left" Content="‹" FontSize="14"
                                         Style="{StaticResource LeiserButton}"
@@ -114,155 +145,70 @@
                             <!-- 6 Wochenzeilen à 7 Tage, gefüllt im Code-Behind -->
                             <UniformGrid x:Name="KalenderTage" Columns="7" Rows="6"/>
                         </StackPanel>
-                    </Border>
+                    </Viewbox>
+                </local:DashCard>
 
-                    <DockPanel Margin="2,20,0,8">
-                        <Button DockPanel.Dock="Right" Content="＋ Termin" FontSize="12"
-                                Style="{StaticResource LeiserButton}"
-                                ToolTip="Termin anlegen — am ausgewählten Kalendertag, sonst heute (auch per Doppelklick auf einen Tag)"
-                                Click="TerminAnlegen_Click"/>
-                        <TextBlock Text="Termine" FontSize="15" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
+                <!-- Termine-Karte: eigene, getrennte Karte -->
+                <local:DashCard x:Name="TermineKarte" CardId="termine"
+                                Canvas.Left="0" Canvas.Top="376" Width="300" Height="300"
+                                MinWidth="220" MinHeight="160">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="2,0,0,8">
+                            <Button DockPanel.Dock="Right" Content="＋ Termin" FontSize="12"
+                                    Style="{StaticResource LeiserButton}"
+                                    ToolTip="Termin anlegen — am ausgewählten Kalendertag, sonst heute (auch per Doppelklick auf einen Tag)"
+                                    Click="TerminAnlegen_Click"/>
+                            <TextBlock Text="Termine" FontSize="15" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock x:Name="TermineLeer" DockPanel.Dock="Top" FontSize="12"
+                                   Margin="2,0,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"
+                                   Text="Keine anstehenden Termine. Aufgaben mit Datum (@2026-07-09) erscheinen hier."/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="TerminListe">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border CornerRadius="8" Padding="8,6" Margin="0,0,0,4"
+                                                Cursor="Hand" MouseLeftButtonUp="Termin_Click"
+                                                ToolTip="Klick öffnet die Quell-Notiz">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background"
+                                                                    Value="{DynamicResource AppAkzentLeiseBrush}"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Width="68"
+                                                           Text="{Binding DatumKompakt}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Margin="0,1,6,0"
+                                                           Foreground="{DynamicResource AppKupferBrush}"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Text}" FontSize="13"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding NotizTitel}" FontSize="11"
+                                                               Margin="0,1,0,0"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
                     </DockPanel>
-                    <TextBlock x:Name="TermineLeer" FontSize="12" Margin="2,0,0,0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource AppTextLeiseBrush}"
-                               Text="Keine anstehenden Termine. Aufgaben mit Datum (@2026-07-09) erscheinen hier."/>
-                    <ItemsControl x:Name="TerminListe">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border CornerRadius="8" Padding="8,6" Margin="0,0,0,4"
-                                        Cursor="Hand" MouseLeftButtonUp="Termin_Click"
-                                        ToolTip="Klick öffnet die Quell-Notiz">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="Transparent"/>
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background"
-                                                            Value="{DynamicResource AppAkzentLeiseBrush}"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <DockPanel>
-                                        <TextBlock DockPanel.Dock="Left" Width="68"
-                                                   Text="{Binding DatumKompakt}"
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Margin="0,1,6,0"
-                                                   Foreground="{DynamicResource AppKupferBrush}"/>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Text}" FontSize="13"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding NotizTitel}" FontSize="11"
-                                                       Margin="0,1,0,0"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                                        </StackPanel>
-                                    </DockPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
+                </local:DashCard>
 
-                <!-- Ziehbare Trennlinie: Breite von Kalender ↔ Neuigkeiten anpassen -->
-                <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Center"
-                              VerticalAlignment="Stretch" Background="Transparent"
-                              ToolTip="Ziehen: Breite von Kalender und Neuigkeiten anpassen">
-                    <GridSplitter.Template>
-                        <ControlTemplate TargetType="GridSplitter">
-                            <Border Background="Transparent">
-                                <Rectangle x:Name="Linie" Width="2" Margin="0,24"
-                                           HorizontalAlignment="Center" RadiusX="1" RadiusY="1"
-                                           Fill="{DynamicResource AppRandBrush}"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Linie" Property="Width" Value="3"/>
-                                    <Setter TargetName="Linie" Property="Fill"
-                                            Value="{DynamicResource AppAkzentBrush}"/>
-                                </Trigger>
-                                <Trigger Property="IsDragging" Value="True">
-                                    <Setter TargetName="Linie" Property="Width" Value="3"/>
-                                    <Setter TargetName="Linie" Property="Fill"
-                                            Value="{DynamicResource AppAkzentBrush}"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </GridSplitter.Template>
-                </GridSplitter>
-
-                <!-- ===== Rechts: Neuigkeiten-Feed ===== -->
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="Neuigkeiten für dich" FontSize="15" FontWeight="SemiBold"
-                               Margin="2,0,0,10"/>
-                    <!-- Kategorie-Filter (Pillen), gefüllt im Code-Behind aus dem geladenen Feed -->
-                    <WrapPanel x:Name="FilterLeiste" Margin="2,0,0,6" Visibility="Collapsed"/>
-                    <TextBlock x:Name="FeedHinweis" FontSize="12" Margin="2,0,0,12"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource AppTextLeiseBrush}"
-                               Text="Noch kein Feed — oben aktualisieren."/>
-                    <ItemsControl x:Name="FeedListe">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border x:Name="Karte" Width="340" CornerRadius="12" Padding="16"
-                                        Margin="0,0,14,14" BorderThickness="1" Cursor="Hand"
-                                        Background="{DynamicResource AppFlaecheBrush}"
-                                        BorderBrush="{DynamicResource AppRandBrush}"
-                                        MouseLeftButtonUp="FeedKarte_Click"
-                                        ToolTip="{Binding Url}">
-                                    <StackPanel>
-                                        <DockPanel>
-                                            <TextBlock DockPanel.Dock="Right" FontSize="11"
-                                                       Text="{Binding DatumAnzeige}"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                                            <!-- Kategorie-Chip: Text + Farben kommen zentral
-                                                 aus FeedKategorien (übers Karten-VM) -->
-                                            <Border CornerRadius="9" Padding="8,2"
-                                                    HorizontalAlignment="Left"
-                                                    Background="{Binding ChipLeiseBrush}">
-                                                <TextBlock FontSize="11" FontWeight="SemiBold"
-                                                           Text="{Binding ChipText}"
-                                                           Foreground="{Binding ChipTextBrush}"/>
-                                            </Border>
-                                        </DockPanel>
-                                        <TextBlock Text="{Binding Titel}" FontSize="14"
-                                                   FontWeight="SemiBold" Margin="0,10,0,0"
-                                                   TextWrapping="Wrap" MaxHeight="40"
-                                                   LineHeight="20"
-                                                   LineStackingStrategy="BlockLineHeight"/>
-                                        <TextBlock Text="{Binding Zusammenfassung}" FontSize="12"
-                                                   TextWrapping="Wrap" Margin="0,6,0,0"
-                                                   Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                                        <DockPanel Margin="0,10,0,0">
-                                            <TextBlock DockPanel.Dock="Right" FontSize="11"
-                                                       Text="{Binding Domain}"
-                                                       VerticalAlignment="Center"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
-                                            <TextBlock Text="Quelle öffnen ↗" FontSize="11"
-                                                       Foreground="{DynamicResource AppAkzentBrush}"/>
-                                        </DockPanel>
-                                    </StackPanel>
-                                </Border>
-                                <DataTemplate.Triggers>
-                                    <Trigger SourceName="Karte" Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Karte" Property="BorderBrush"
-                                                Value="{DynamicResource AppAkzentBrush}"/>
-                                    </Trigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Grid>
-        </StackPanel>
-    </ScrollViewer>
+                <!-- News-Karten werden im Code-Behind (ZeigeFeedKarten) erzeugt -->
+            </Canvas>
+        </ScrollViewer>
+    </Grid>
 </UserControl>

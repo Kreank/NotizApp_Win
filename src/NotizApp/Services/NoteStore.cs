@@ -18,22 +18,23 @@ public class NoteStore
 
     // ---------- Initialisierung ----------
 
-    static readonly string[] StandardNotizbuecher =
-        { "Eingang", "Kunden-Anrufe", "Meetings", "Nachschlagewerk" };
+    /// <summary>Der einzige immer vorhandene Standard-Ordner. Fallback für neue Notizen
+    /// ohne gewähltes Notizbuch. Andere Ordner legt der Nutzer selbst an — einmal
+    /// gelöscht, kommen sie nicht wieder.</summary>
+    public const string StandardNotizbuch = "Nachschlagewerk";
 
-    /// <summary>Legt Standard-Notizbücher und beim allerersten Mal eine Willkommensnotiz an.</summary>
+    /// <summary>Legt den Standard-Ordner und beim allerersten Mal eine Willkommensnotiz an.</summary>
     public void Initialisieren()
     {
         bool neu = !Directory.Exists(DataFolder) ||
                    !Directory.EnumerateDirectories(DataFolder).Any();
-        foreach (var nb in StandardNotizbuecher)
-            Directory.CreateDirectory(Path.Combine(DataFolder, nb));
+        Directory.CreateDirectory(Path.Combine(DataFolder, StandardNotizbuch));
 
         if (neu)
         {
             var willkommen = new Note
             {
-                Notizbuch = "Eingang",
+                Notizbuch = StandardNotizbuch,
                 Meta = new NoteMeta
                 {
                     Titel = "Willkommen in der NotizApp",
@@ -62,7 +63,7 @@ public class NoteStore
                     }
                 }
             };
-            willkommen.Pfad = NeuerPfad("Eingang", "leer");
+            willkommen.Pfad = NeuerPfad(StandardNotizbuch, "leer");
             Speichere(willkommen);
         }
     }
