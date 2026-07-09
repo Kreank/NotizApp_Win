@@ -243,24 +243,68 @@ public partial class ErfassungTool : UserControl
     void SubWe(Wohneinheit w)
     {
         w.Orte.CollectionChanged += WeOrte_Changed;
-        foreach (var o in w.Orte) o.PropertyChanged += Ort_Changed;
+        foreach (var o in w.Orte) SubOrt(o);
     }
 
     void UnsubWe(Wohneinheit w)
     {
         w.Orte.CollectionChanged -= WeOrte_Changed;
-        foreach (var o in w.Orte) o.PropertyChanged -= Ort_Changed;
+        foreach (var o in w.Orte) UnsubOrt(o);
     }
 
     void WeOrte_Changed(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.OldItems is not null) foreach (Ort o in e.OldItems) o.PropertyChanged -= Ort_Changed;
-        if (e.NewItems is not null) foreach (Ort o in e.NewItems) o.PropertyChanged += Ort_Changed;
+        if (e.OldItems is not null) foreach (Ort o in e.OldItems) UnsubOrt(o);
+        if (e.NewItems is not null) foreach (Ort o in e.NewItems) SubOrt(o);
         (_we.FirstOrDefault(w => w.Orte == sender))?.MeldeGeaendert();
         OnGeaendert();
     }
 
     void Ort_Changed(object? sender, PropertyChangedEventArgs e) => OnGeaendert();
+
+    // Teilstrecken je Ort – verschachtelte Änderungen an den Ort melden
+    void SubOrt(Ort o)
+    {
+        o.PropertyChanged += Ort_Changed;
+        o.Teilstrecken.CollectionChanged += OrtTs_Changed;
+        foreach (var t in o.Teilstrecken) t.PropertyChanged += Ts_Changed;
+    }
+
+    void UnsubOrt(Ort o)
+    {
+        o.PropertyChanged -= Ort_Changed;
+        o.Teilstrecken.CollectionChanged -= OrtTs_Changed;
+        foreach (var t in o.Teilstrecken) t.PropertyChanged -= Ts_Changed;
+    }
+
+    void OrtTs_Changed(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null) foreach (Teilstrecke t in e.OldItems) t.PropertyChanged -= Ts_Changed;
+        if (e.NewItems is not null) foreach (Teilstrecke t in e.NewItems) t.PropertyChanged += Ts_Changed;
+        (_we.SelectMany(w => w.Orte).FirstOrDefault(o => o.Teilstrecken == sender))?.MeldeGeaendert();
+        OnGeaendert();
+    }
+
+    void Ts_Changed(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is Teilstrecke t && e.PropertyName == nameof(Teilstrecke.Laenge))
+            (_we.SelectMany(w => w.Orte).FirstOrDefault(o => o.Teilstrecken.Contains(t)))?.MeldeGeaendert();
+        OnGeaendert();
+    }
+
+    void TsHinzufuegen_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Ort o) return;
+        var letzte = o.Teilstrecken.LastOrDefault();
+        o.Teilstrecken.Add(new Teilstrecke { Von = letzte?.Bis ?? "Abzweig Strang" });
+    }
+
+    void TsLoeschen_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Teilstrecke t) return;
+        var ort = _we.SelectMany(w => w.Orte).FirstOrDefault(o => o.Teilstrecken.Contains(t));
+        ort?.Teilstrecken.Remove(t);
+    }
 
     void OrtHinzufuegen_Click(object sender, RoutedEventArgs e)
     {
@@ -571,6 +615,20 @@ public partial class ErfassungTool : UserControl
                           $"{w.Orte.Sum(o => o.Waschtisch)} | {w.Orte.Sum(o => o.Dusche)} | {w.Orte.Sum(o => o.Wanne)} | " +
                           $"{w.Orte.Sum(o => o.Wc)} | {w.Orte.Sum(o => o.Waschmaschine)} | {w.Orte.Sum(o => o.Geschirrspueler)} | " +
                           $"{w.Orte.Sum(o => o.Kueche)} | {Zahl(w.Laenge)} | {w.Boegen} | {w.TStuecke} |");
+        }
+
+        if (_we.Any(w => w.Orte.Any(o => o.Teilstrecken.Count > 0)))
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Teilstrecken je Ort:**");
+            sb.AppendLine();
+            sb.AppendLine("| Wohneinheit | Ort | von → bis | Länge m | Bögen | T-St. | Red. | Fittinge |");
+            sb.AppendLine("|---|---|---|---:|---:|---:|---:|---|");
+            foreach (var w in _we)
+                foreach (var o in w.Orte)
+                    foreach (var t in o.Teilstrecken)
+                        sb.AppendLine($"| {w.Name} | {o.Name} | {t.Von} → {t.Bis} | {Zahl(t.Laenge)} | " +
+                                      $"{t.Boegen} | {t.TStuecke} | {t.Reduzierungen} | {t.Fittinge} |");
         }
         sb.AppendLine();
         sb.AppendLine($"- ΣVR kalt {Zahl(kalt)} · warm {Zahl(warm)} · **gesamt {Zahl(gesamt)} l/s** · " +

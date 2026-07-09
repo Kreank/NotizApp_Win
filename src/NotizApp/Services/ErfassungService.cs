@@ -100,8 +100,38 @@ public class TwRandbedingungen : ErfassungBasis
     public string WwKonzept { get => _wwKonzept; set => Setze(ref _wwKonzept, value); }
 }
 
+/// <summary>Eine Leitungs-Teilstrecke innerhalb eines Orts – von Objekt zu Objekt
+/// (z. B. „Abzweig Strang → Waschtisch") mit Länge und geplanten Fittingen.</summary>
+public class Teilstrecke : INotifyPropertyChanged
+{
+    string _von = "", _bis = "", _fittinge = "";
+    double _laenge;
+    int _boegen, _tstuecke, _reduzierungen;
+
+    /// <summary>Startpunkt (z. B. Abzweig Strang, vorheriges Objekt).</summary>
+    public string Von { get => _von; set => Setze(ref _von, value); }
+    /// <summary>Endpunkt (z. B. Waschtisch, Dusche, WC).</summary>
+    public string Bis { get => _bis; set => Setze(ref _bis, value); }
+    /// <summary>Leitungslänge der Teilstrecke (m).</summary>
+    public double Laenge { get => _laenge; set => Setze(ref _laenge, value); }
+    public int Boegen { get => _boegen; set => Setze(ref _boegen, value < 0 ? 0 : value); }
+    public int TStuecke { get => _tstuecke; set => Setze(ref _tstuecke, value < 0 ? 0 : value); }
+    public int Reduzierungen { get => _reduzierungen; set => Setze(ref _reduzierungen, value < 0 ? 0 : value); }
+    /// <summary>Sonstige geplante Fittinge/Armaturen (Freitext, z. B. Eckventil, Wandscheibe).</summary>
+    public string Fittinge { get => _fittinge; set => Setze(ref _fittinge, value); }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    void Setze<T>(ref T feld, T wert, [CallerMemberName] string? n = null)
+    {
+        if (Equals(feld, wert)) return;
+        feld = wert;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+    }
+}
+
 /// <summary>Ein Ort/Raum innerhalb einer Wohneinheit (Bad, Küche, Gäste-WC …) mit
-/// gezählten Entnahmestellen.</summary>
+/// gezählten Entnahmestellen und Leitungs-Teilstrecken.</summary>
 public class Ort : ErfassungBasis
 {
     string _name = "";
@@ -116,6 +146,26 @@ public class Ort : ErfassungBasis
     public int Geschirrspueler { get => _gsw; set => Setze(ref _gsw, value < 0 ? 0 : value); }
     /// <summary>Küchenspüle.</summary>
     public int Kueche { get => _kueche; set => Setze(ref _kueche, value < 0 ? 0 : value); }
+
+    /// <summary>Leitungs-Teilstrecken in diesem Ort (Objekt → Objekt) mit Länge und Fittingen.</summary>
+    public ObservableCollection<Teilstrecke> Teilstrecken { get; set; } = new();
+
+    /// <summary>Zusammenfassung der Teilstrecken (Anzahl + Summe der Längen).</summary>
+    [JsonIgnore]
+    public string SummeLaengeText
+    {
+        get
+        {
+            if (Teilstrecken.Count == 0) return "";
+            double l = Teilstrecken.Sum(t => t.Laenge);
+            return Teilstrecken.Count == 1
+                ? $"1 Teilstrecke · {l:0.##} m"
+                : $"{Teilstrecken.Count} Teilstrecken · Σ {l:0.##} m";
+        }
+    }
+
+    /// <summary>Von außen aufrufbar, damit Teilstrecken-Änderungen die Summenzeile aktualisieren.</summary>
+    public void MeldeGeaendert() => Melde(nameof(SummeLaengeText));
 }
 
 /// <summary>Eine Wohneinheit mit Orten (Bad/Küche/…). „Anzahl" bündelt mehrere

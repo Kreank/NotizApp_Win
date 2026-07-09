@@ -443,7 +443,8 @@
                                                                         Background="Transparent" BorderThickness="0"
                                                                         Foreground="{DynamicResource AppTextLeiseBrush}"
                                                                         ToolTip="Ort entfernen" Click="OrtLoeschen_Click"/>
-                                                                <WrapPanel>
+                                                                <StackPanel>
+                                                                    <WrapPanel>
                                                                     <StackPanel Width="150" Margin="0,0,10,6">
                                                                         <TextBlock Text="Ort" Style="{StaticResource FeldLabel}"/>
                                                                         <TextBox Style="{StaticResource Eingabe}"
@@ -484,7 +485,76 @@
                                                                         <TextBox Style="{StaticResource Eingabe}"
                                                                                  Text="{Binding Kueche, UpdateSourceTrigger=PropertyChanged}"/>
                                                                     </StackPanel>
-                                                                </WrapPanel>
+                                                                    </WrapPanel>
+
+                                                                    <!-- Leitung in diesem Ort: Teilstrecken Objekt → Objekt -->
+                                                                    <TextBlock Text="LEITUNG IN DIESEM ORT (Teilstrecken Objekt → Objekt)"
+                                                                               FontSize="10.5" FontWeight="SemiBold" Margin="0,4,0,4"
+                                                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                                                    <ItemsControl ItemsSource="{Binding Teilstrecken}">
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate>
+                                                                                <DockPanel Margin="0,0,0,4">
+                                                                                    <Button DockPanel.Dock="Right" Content="✕" Width="24"
+                                                                                            Height="24" Padding="0" Cursor="Hand"
+                                                                                            VerticalAlignment="Top"
+                                                                                            Background="Transparent" BorderThickness="0"
+                                                                                            Foreground="{DynamicResource AppTextLeiseBrush}"
+                                                                                            ToolTip="Teilstrecke entfernen"
+                                                                                            Click="TsLoeschen_Click"/>
+                                                                                    <WrapPanel>
+                                                                                        <StackPanel Width="118" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="von" Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     ToolTip="z. B. Abzweig Strang, Waschtisch"
+                                                                                                     Text="{Binding Von, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Width="118" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="bis" Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     ToolTip="z. B. Dusche, WC"
+                                                                                                     Text="{Binding Bis, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Width="66" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="Länge (m)" Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     Text="{Binding Laenge, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Width="56" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="Bögen" Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     Text="{Binding Boegen, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Width="56" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="T-Stücke" Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     Text="{Binding TStuecke, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Width="56" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="Reduz." Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     Text="{Binding Reduzierungen, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Width="150" Margin="0,0,6,4">
+                                                                                            <TextBlock Text="sonstige Fittinge" Style="{StaticResource FeldLabel}"/>
+                                                                                            <TextBox Style="{StaticResource Eingabe}"
+                                                                                                     ToolTip="z. B. Eckventil, Wandscheibe, Absperrventil"
+                                                                                                     Text="{Binding Fittinge, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                                        </StackPanel>
+                                                                                    </WrapPanel>
+                                                                                </DockPanel>
+                                                                            </DataTemplate>
+                                                                        </ItemsControl.ItemTemplate>
+                                                                    </ItemsControl>
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <Button Content="➕ Teilstrecke" Padding="8,3" FontSize="12"
+                                                                                ToolTip="Teilstrecke anfügen – ‚von' wird mit dem letzten ‚bis' vorbelegt"
+                                                                                Click="TsHinzufuegen_Click"/>
+                                                                        <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11.5"
+                                                                                   Foreground="{DynamicResource AppTextLeiseBrush}"
+                                                                                   Text="{Binding SummeLaengeText}"/>
+                                                                    </StackPanel>
+                                                                </StackPanel>
                                                             </DockPanel>
                                                         </Border>
                                                     </DataTemplate>
