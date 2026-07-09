@@ -88,6 +88,7 @@ public partial class MainWindow : Window
         AusdehnungTool.ErgebnisEinfuegen += ChatTextEinfuegen;
         GeraetewissenTool.ErgebnisEinfuegen += ChatTextEinfuegen;
         GeraetewissenTool.Einstellungen = settings;
+        ErfassungTool.ErgebnisEinfuegen += ChatTextEinfuegen;
 
         _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _autosaveTimer.Tick += (_, _) => { _autosaveTimer.Stop(); SpeichereAktuelle(); };
@@ -239,7 +240,7 @@ public partial class MainWindow : Window
     /// (Index = Listeneintrag). Bei neuem Tool hier und in der Liste ergänzen.</summary>
     UIElement[] Werkzeuge => new UIElement[]
         { HeizlastTool, VolumenstromTool, WasserinhaltTool, AusdehnungTool, UmrechnerTool,
-          GeraetewissenTool };
+          GeraetewissenTool, ErfassungTool };
 
     /// <summary>Auswahl in der WERKZEUGE-Liste: das gewählte Tool über den Editor legen.</summary>
     void WerkzeugListe_SelectionChanged(object sender, SelectionChangedEventArgs e)

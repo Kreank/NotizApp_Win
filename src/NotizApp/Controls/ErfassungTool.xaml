@@ -1,0 +1,1200 @@
+﻿<UserControl x:Class="NotizApp.Controls.ErfassungTool"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:svc="clr-namespace:NotizApp.Services"
+             Language="de-DE">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolZuSicht"/>
+
+        <Style x:Key="FeldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style x:Key="Eingabe" TargetType="TextBox">
+            <Setter Property="Padding" Value="7,5"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Background" Value="{DynamicResource AppFlaecheTiefBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- ComboBox theme-tauglich (Box + Popup + Items, hell/dunkel lesbar) -->
+        <Style x:Key="EingabeComboItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="9,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ib" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ib" Property="Background"
+                                        Value="{DynamicResource AppAkzentLeiseBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="EingabeCombo" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource EingabeComboItem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False" ClickMode="Press"
+                                    IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="bd" Background="{DynamicResource AppFlaecheTiefBrush}"
+                                                BorderBrush="{DynamicResource AppRandBrush}"
+                                                BorderThickness="1.4" CornerRadius="4">
+                                            <Border Width="30" HorizontalAlignment="Right"
+                                                    Background="{DynamicResource AppFlaecheBrush}"
+                                                    CornerRadius="0,3,3,0"
+                                                    BorderBrush="{DynamicResource AppRandBrush}"
+                                                    BorderThickness="1,0,0,0">
+                                                <TextBlock Text="▼" HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" FontSize="10"
+                                                           Foreground="{DynamicResource AppTextBrush}"/>
+                                            </Border>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="bd" Property="BorderBrush"
+                                                        Value="{DynamicResource AppAkzentBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter IsHitTestVisible="False"
+                                    Content="{TemplateBinding SelectionBoxItem}"
+                                    ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                    Margin="10,0,38,0" VerticalAlignment="Center"
+                                    HorizontalAlignment="Left"
+                                    TextElement.Foreground="{DynamicResource AppTextBrush}"/>
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="False" Focusable="False">
+                                <Border Background="{DynamicResource AppFlaecheTiefBrush}"
+                                        BorderBrush="{DynamicResource AppAkzentBrush}"
+                                        BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Feld" TargetType="StackPanel">
+            <Setter Property="Width" Value="228"/>
+            <Setter Property="Margin" Value="0,0,16,12"/>
+        </Style>
+        <Style x:Key="FeldSchmal" TargetType="StackPanel" BasedOn="{StaticResource Feld}">
+            <Setter Property="Width" Value="120"/>
+        </Style>
+        <Style x:Key="Haken" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="Margin" Value="0,0,20,10"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Einklappbarer Abschnitt (clean, dark-tauglich) -->
+        <Style x:Key="Abschnitt" TargetType="Expander">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Border Background="{DynamicResource AppFlaecheBrush}"
+                                BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                                CornerRadius="10" Margin="0,0,0,12">
+                            <DockPanel>
+                                <ToggleButton DockPanel.Dock="Top" Cursor="Hand" Focusable="True"
+                                        Content="{TemplateBinding Header}"
+                                        IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border Background="Transparent" Padding="16,13">
+                                                <DockPanel>
+                                                    <TextBlock x:Name="Chev" DockPanel.Dock="Right" Text="▾"
+                                                               FontSize="12" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                                    <ContentPresenter VerticalAlignment="Center"/>
+                                                </DockPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="False">
+                                                    <Setter TargetName="Chev" Property="Text" Value="▸"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <Border x:Name="Inhalt" DockPanel.Dock="Bottom" Visibility="Collapsed"
+                                        Padding="16,2,16,16">
+                                    <ContentPresenter/>
+                                </Border>
+                            </DockPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="Inhalt" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- DataGrid-Zellen/Kopf -->
+        <Style x:Key="GridKopf" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource AppFlaecheTiefBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppRandBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="GridZelle" TargetType="DataGridCell">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="TitelText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="HinweisText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="10,0,0,0"/>
+        </Style>
+        <Style x:Key="UnterTitel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLeiseBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24,20,24,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== Kopf ===== -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="📋 SHK-Aufnahme" FontSize="22" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppTextBrush}"/>
+            <TextBlock Text="Bestandsaufnahme vor Ort — Eingangsdaten für Viptool Master. Abschnitte auf-/zuklappen; alles wird automatisch gespeichert."
+                       FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap" MaxWidth="820"
+                       HorizontalAlignment="Left" Foreground="{DynamicResource AppTextLeiseBrush}"/>
+        </StackPanel>
+
+        <!-- ===== Vorhaben-Leiste ===== -->
+        <Border Grid.Row="1" Background="{DynamicResource AppFlaecheBrush}"
+                BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                CornerRadius="10" Padding="12" Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Vorhaben" VerticalAlignment="Center" Margin="0,0,10,0"
+                           FontSize="13" Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                <ComboBox x:Name="VorhabenBox" Width="260" Padding="8,5" FontSize="14"
+                          SelectionChanged="VorhabenBox_Changed"/>
+                <Button x:Name="NeuButton" Content="➕ Neu" Padding="10,5" Margin="10,0,0,0"
+                        Click="Neu_Click"/>
+                <Button x:Name="UmbenennenButton" Content="✏ Umbenennen" Padding="10,5" Margin="6,0,0,0"
+                        Click="Umbenennen_Click"/>
+                <Button x:Name="LoeschenButton" Content="🗑 Löschen" Padding="10,5" Margin="6,0,0,0"
+                        Click="VorhabenLoeschen_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== Abschnitte ===== -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+            <StackPanel x:Name="AbschnittRoot" MaxWidth="900" HorizontalAlignment="Left">
+
+                <!-- ===== Szenario ===== -->
+                <Border Background="{DynamicResource AppFlaecheBrush}"
+                        BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                        CornerRadius="10" Padding="12" Margin="0,0,0,12">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Szenario" VerticalAlignment="Center" Margin="0,0,10,0"
+                                       FontSize="13" Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                            <ComboBox x:Name="SzenarioBox" Width="240" Style="{StaticResource EingabeCombo}"
+                                      ItemsSource="{x:Static svc:ErfassungStore.Szenarien}"
+                                      SelectedItem="{Binding Szenario}"
+                                      SelectionChanged="Szenario_Changed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="SzenarioHinweis" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== Gebäude ===== -->
+                <Expander Style="{StaticResource Abschnitt}" IsExpanded="True">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🏢 Gebäude &amp; Projekt" Style="{StaticResource TitelText}"/>
+                            <TextBlock Text="gilt für alle Gewerke" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Kunde / Objektname" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Kunde, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Adresse" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Adresse, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Gebäudeart / Nutzung" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox x:Name="GebaeudeartBox" Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.Gebaeudearten}"
+                                          SelectedItem="{Binding Gebaeude.Gebaeudeart}"
+                                          SelectionChanged="Gebaeudeart_Changed"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Baujahr" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Baujahr, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Energetischer Zustand / Sanierungen" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Zustand, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Geschosse" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Geschosse, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Geschosshöhe (m)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Geschosshoehe, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Beheizte Fläche (m²)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.BeheizteFlaeche, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Nutzeinheiten" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Nutzeinheiten, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Personen / Betten" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Personen, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Standort (für Norm-Außentemp.)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.Standort, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="θe Außen (°C)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gebaeude.NormAussentemp, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Einspeisedruck (bar)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         ToolTip="Mindestversorgungsdruck WVU — beim Versorger erfragen"
+                                         Text="{Binding Gebaeude.Einspeisedruck, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </WrapPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
+                            <CheckBox Content="Keller (beheizt)" Style="{StaticResource Haken}"
+                                      IsChecked="{Binding Gebaeude.Keller}"/>
+                            <CheckBox Content="Dachgeschoss (beheizt)" Style="{StaticResource Haken}"
+                                      IsChecked="{Binding Gebaeude.Dachgeschoss}"/>
+                        </StackPanel>
+                        <TextBlock Text="Bemerkung" Style="{StaticResource FeldLabel}"/>
+                        <TextBox Style="{StaticResource Eingabe}" AcceptsReturn="True" MinHeight="46"
+                                 TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                 Text="{Binding Gebaeude.Bemerkung, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ===== Trinkwasser ===== -->
+                <Expander Style="{StaticResource Abschnitt}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🚰 Trinkwasser" Style="{StaticResource TitelText}"/>
+                            <TextBlock x:Name="TwKopfHinweis" Text="0 Entnahmestellen" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+
+                        <!-- Warmwasser-Konzept -->
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource Feld}" Width="300">
+                                <TextBlock Text="Warmwasser-Konzept" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.WwKonzepte}"
+                                          SelectedItem="{Binding TwRand.WwKonzept}"/>
+                            </StackPanel>
+                            <TextBlock Text="Einspeisedruck steht in „Gebäude &amp; Projekt“."
+                                       VerticalAlignment="Bottom" Margin="4,0,0,16" FontSize="11.5"
+                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                        </WrapPanel>
+
+                        <!-- Entnahmestellen je Wohneinheit -->
+                        <TextBlock Text="ENTNAHMESTELLEN JE WOHNEINHEIT" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,10,0,4"/>
+                        <TextBlock Style="{StaticResource UnterTitel}"
+                                   Text="Je Wohnungstyp die Entnahmestellen zählen. „× gleiche Whg.“ bündelt identische Wohnungen (z. B. 8 gleiche am Strang)."/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button Content="➕ Wohneinheit" Padding="10,5" FontWeight="SemiBold"
+                                    Click="WeHinzufuegen_Click"/>
+                        </StackPanel>
+                        <ItemsControl x:Name="WeListe">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource AppFlaecheTiefBrush}"
+                                            BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                                            CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,10">
+                                                <Button DockPanel.Dock="Right" Content="✕ entfernen"
+                                                        Padding="8,3" FontSize="12" Cursor="Hand"
+                                                        Click="WeLoeschen_Click"/>
+                                                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+                                                           Margin="0,0,12,0" FontSize="12"
+                                                           Foreground="{DynamicResource AppTextLeiseBrush}"
+                                                           Text="{Binding SummeVrText}"/>
+                                                <TextBlock Text="Wohneinheit" VerticalAlignment="Center"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource AppTextBrush}"/>
+                                            </DockPanel>
+                                            <WrapPanel>
+                                                <StackPanel Style="{StaticResource Feld}">
+                                                    <TextBlock Text="Bezeichnung" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             ToolTip="z. B. Wohnung Typ A, EG links"
+                                                             Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="× gleiche Whg." Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Anzahl, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </WrapPanel>
+                                            <TextBlock Text="ORTE / RÄUME" FontSize="10.5" FontWeight="SemiBold"
+                                                       Margin="0,4,0,6"
+                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                <Button Content="➕ Bad" Tag="Badezimmer" Padding="9,4" Margin="0,0,6,0"
+                                                        FontSize="12" Click="OrtHinzufuegen_Click"/>
+                                                <Button Content="➕ Küche" Tag="Küche" Padding="9,4" Margin="0,0,6,0"
+                                                        FontSize="12" Click="OrtHinzufuegen_Click"/>
+                                                <Button Content="➕ Gäste-WC" Tag="Gäste-WC" Padding="9,4" Margin="0,0,6,0"
+                                                        FontSize="12" Click="OrtHinzufuegen_Click"/>
+                                                <Button Content="➕ HWR" Tag="HWR" Padding="9,4" Margin="0,0,6,0"
+                                                        FontSize="12" Click="OrtHinzufuegen_Click"/>
+                                                <Button Content="➕ Ort" Tag="Ort" Padding="9,4"
+                                                        FontSize="12" Click="OrtHinzufuegen_Click"/>
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Orte}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{DynamicResource AppFlaecheBrush}"
+                                                                BorderBrush="{DynamicResource AppRandBrush}"
+                                                                BorderThickness="1" CornerRadius="6"
+                                                                Padding="8" Margin="0,0,0,6">
+                                                            <DockPanel>
+                                                                <Button DockPanel.Dock="Right" Content="✕" Width="26"
+                                                                        Height="26" Padding="0" Cursor="Hand"
+                                                                        VerticalAlignment="Top"
+                                                                        Background="Transparent" BorderThickness="0"
+                                                                        Foreground="{DynamicResource AppTextLeiseBrush}"
+                                                                        ToolTip="Ort entfernen" Click="OrtLoeschen_Click"/>
+                                                                <WrapPanel>
+                                                                    <StackPanel Width="150" Margin="0,0,10,6">
+                                                                        <TextBlock Text="Ort" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="Waschtisch" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Waschtisch, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="Dusche" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Dusche, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="Badewanne" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Wanne, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="WC" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Wc, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="Waschmasch." Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Waschmaschine, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="Geschirrsp." Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Geschirrspueler, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="82" Margin="0,0,8,6">
+                                                                        <TextBlock Text="Küchenspüle" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Kueche, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                </WrapPanel>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Text="ANSCHLUSSLEITUNG (Strang → Wohnung)" FontSize="10.5"
+                                                       FontWeight="SemiBold" Margin="0,4,0,6"
+                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                            <WrapPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Länge (m)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Laenge, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="geod. Höhe (m)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Hoehe, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Bögen" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Boegen, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="T-Stücke" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding TStuecke, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Reduzierungen" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Reduzierungen, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </WrapPanel>
+                                            <Expander Margin="0,4,0,0" FontSize="12"
+                                                      Foreground="{DynamicResource AppTextLeiseBrush}">
+                                                <Expander.Header>
+                                                    <TextBlock Text="Bestand: Werkstoff &amp; DN (optional)" FontSize="12"
+                                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                                </Expander.Header>
+                                                <WrapPanel Margin="0,6,0,0">
+                                                    <StackPanel Style="{StaticResource Feld}">
+                                                        <TextBlock Text="vorh. Werkstoff" Style="{StaticResource FeldLabel}"/>
+                                                        <ComboBox Style="{StaticResource EingabeCombo}"
+                                                                  ItemsSource="{x:Static svc:ErfassungStore.Werkstoffe}"
+                                                                  SelectedItem="{Binding Werkstoff}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Style="{StaticResource FeldSchmal}">
+                                                        <TextBlock Text="vorh. DN" Style="{StaticResource FeldLabel}"/>
+                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                 Text="{Binding Nennweite, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </StackPanel>
+                                                </WrapPanel>
+                                            </Expander>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="WeLeer" FontSize="12.5" Margin="2,2,0,0"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"
+                                   Text="Noch keine Wohneinheit. Mit „➕ Wohneinheit“ die erste anlegen."/>
+
+                        <!-- Summen + Spitzenvolumenstrom -->
+                        <Border Background="{DynamicResource AppAkzentLeiseBrush}" CornerRadius="10"
+                                Padding="16" Margin="0,14,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel Margin="0,0,26,0">
+                                        <TextBlock Text="ΣVR kalt" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="SummeKalt" Text="0 l/s" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppTextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,26,0">
+                                        <TextBlock Text="ΣVR warm" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="SummeWarm" Text="0 l/s" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppTextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,26,0">
+                                        <TextBlock Text="ΣVR gesamt" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="SummeGesamt" Text="0 l/s" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppKupferBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Spitzenvolumenstrom Vs" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="VsErgebnis" Text="—" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppKupferBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Vs = a·(ΣVR)^b − c" FontFamily="Consolas" FontSize="12.5"
+                                               VerticalAlignment="Center" Margin="0,0,14,0"
+                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                    <TextBlock Text="a" VerticalAlignment="Center" Margin="0,0,4,0" FontSize="12.5"
+                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                    <TextBox x:Name="KoeffA" Width="58" Style="{StaticResource Eingabe}"
+                                             FontSize="12.5" TextChanged="Koeff_Changed"/>
+                                    <TextBlock Text="b" VerticalAlignment="Center" Margin="10,0,4,0" FontSize="12.5"
+                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                    <TextBox x:Name="KoeffB" Width="58" Style="{StaticResource Eingabe}"
+                                             FontSize="12.5" TextChanged="Koeff_Changed"/>
+                                    <TextBlock Text="c" VerticalAlignment="Center" Margin="10,0,4,0" FontSize="12.5"
+                                               Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                    <TextBox x:Name="KoeffC" Width="58" Style="{StaticResource Eingabe}"
+                                             FontSize="12.5" TextChanged="Koeff_Changed"/>
+                                    <TextBlock x:Name="KoeffQuelle" VerticalAlignment="Center" Margin="14,0,0,0"
+                                               FontSize="11.5" Foreground="{DynamicResource AppTextLeiseBrush}"
+                                               Text="nach DIN 1988-300 · Gebäudeart im Kopf"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Hygiene -->
+                        <TextBlock Text="HYGIENE / SONSTIGES" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,14,0,6"/>
+                        <TextBox Style="{StaticResource Eingabe}" AcceptsReturn="True" MinHeight="46"
+                                 TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                 ToolTip="Totleitungen, Temperaturen (WW≥60/Zirk≥55°C), 3-Liter-Regel, Dämmung, selten genutzte Stellen …"
+                                 Text="{Binding TwRand.Bemerkung, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="➕ Trinkwasser in Notiz" Padding="12,7" Click="TwEinfuegen_Click"/>
+                            <Button Content="📋 Kopieren" Padding="12,7" Margin="10,0,0,0" Click="TwKopieren_Click"/>
+                            <TextBlock x:Name="TwHinweis" Text="" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ===== Abwasser ===== -->
+                <Expander Style="{StaticResource Abschnitt}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🚽 Abwasser" Style="{StaticResource TitelText}"/>
+                            <TextBlock x:Name="AwKopfHinweis" Text="0 Objekte" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource UnterTitel}"
+                                   Text="Ergibt sich automatisch aus den Trinkwasser-Entnahmestellen → Qww = K·√ΣDU. Nur reine Abläufe ohne Zapfstelle ergänzen."/>
+
+                        <TextBlock Text="RANDBEDINGUNGEN" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,0,0,8"/>
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Nutzung (→ Abflusskennzahl K)" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox x:Name="AwNutzungBox" Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.NutzungsartenNamen}"
+                                          SelectedItem="{Binding Aw.Nutzung}"
+                                          SelectionChanged="AwNutzung_Changed"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="K" Style="{StaticResource FeldLabel}"/>
+                                <TextBox x:Name="AwKBox" Style="{StaticResource Eingabe}"
+                                         Text="{Binding Aw.K, UpdateSourceTrigger=PropertyChanged}"
+                                         TextChanged="AwK_Changed"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Entwässerungssystem" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.EntwSysteme}"
+                                          SelectedItem="{Binding Aw.EntwSystem}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Öffentl. Kanal" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.Kanalsysteme}"
+                                          SelectedItem="{Binding Aw.Kanalsystem}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Rückstauebene (Höhe/Lage)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Aw.Rueckstauebene, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Anschlusskanal (Sohle/Tiefe)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Aw.Kanalsohle, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,2,0,6">
+                            <CheckBox Content="Hauptlüftung über Dach" Style="{StaticResource Haken}"
+                                      IsChecked="{Binding Aw.Hauptlueftung}"/>
+                            <CheckBox Content="Rückstausicherung" Style="{StaticResource Haken}"
+                                      IsChecked="{Binding Aw.Rueckstausicherung}"/>
+                            <CheckBox Content="Hebeanlage erforderlich" Style="{StaticResource Haken}"
+                                      IsChecked="{Binding Aw.Hebeanlage}"/>
+                        </WrapPanel>
+
+                        <DockPanel Margin="0,10,0,6">
+                            <TextBlock DockPanel.Dock="Right" x:Name="AwAbgeleitetSumme" Text="ΣDU 0 l/s"
+                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                            <TextBlock Text="AUS TRINKWASSER ABGELEITET" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                        </DockPanel>
+                        <Border BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                                CornerRadius="8" Padding="4">
+                            <StackPanel>
+                                <ItemsControl x:Name="AwAbgeleitetListe">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="8,5">
+                                                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+                                                           FontFamily="Consolas" FontSize="12.5"
+                                                           Foreground="{DynamicResource AppTextBrush}"
+                                                           Text="{Binding SummeDu, StringFormat={}{0:0.##} l/s}"/>
+                                                <TextBlock VerticalAlignment="Center" FontSize="13"
+                                                           Foreground="{DynamicResource AppTextBrush}">
+                                                    <Run Text="{Binding Anzahl, Mode=OneWay}"/><Run Text="× "/><Run Text="{Binding Bezeichnung, Mode=OneWay}"/><Run Text="  ("/><Run Text="{Binding Du, Mode=OneWay, StringFormat=0.##}"/><Run Text=" l/s)"/>
+                                                </TextBlock>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="AwAbgeleitetLeer" Margin="8,7" FontSize="12.5"
+                                           Foreground="{DynamicResource AppTextLeiseBrush}"
+                                           Text="Noch keine ableitbaren Entnahmestellen im Trinkwasser-Abschnitt. Wird automatisch übernommen."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="ZUSÄTZLICHE ABLÄUFE (ohne Zapfstelle)" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,14,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <ComboBox x:Name="AwVorlageBox" Width="230" Style="{StaticResource EingabeCombo}"
+                                      DisplayMemberPath="Anzeige"/>
+                            <Button Content="➕ Hinzufügen" Padding="10,5" Margin="8,0,0,0"
+                                    FontWeight="SemiBold" Click="AwVorlageHinzufuegen_Click"/>
+                            <Button Content="➕ Leer" Padding="10,5" Margin="6,0,0,0"
+                                    Click="AwLeereZeile_Click"/>
+                            <TextBlock Text="z. B. Bodenablauf, Kellerablauf — was keine Zapfstelle hat"
+                                       Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                        <DataGrid x:Name="AwGrid" AutoGenerateColumns="False" CanUserAddRows="False"
+                                  CanUserDeleteRows="False" HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal" SelectionUnit="Cell"
+                                  Background="Transparent" RowBackground="Transparent"
+                                  BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                                  Foreground="{DynamicResource AppTextBrush}"
+                                  HorizontalGridLinesBrush="{DynamicResource AppRandBrush}"
+                                  ColumnHeaderHeight="32" RowHeight="33"
+                                  ColumnHeaderStyle="{StaticResource GridKopf}"
+                                  CellStyle="{StaticResource GridZelle}"
+                                  Visibility="Collapsed">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Ablauf" Binding="{Binding Bezeichnung}" Width="*"/>
+                                <DataGridTextColumn Header="Anzahl" Binding="{Binding Anzahl}" Width="70"/>
+                                <DataGridTextColumn Header="DU l/s" Binding="{Binding Du, StringFormat=0.##}" Width="80"/>
+                                <DataGridTextColumn Header="ΣDU l/s" Binding="{Binding SummeDu, StringFormat=0.##}"
+                                                    Width="80" IsReadOnly="True"/>
+                                <DataGridTemplateColumn Header="" Width="36">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="✕" Width="24" Height="24" Padding="0"
+                                                    Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                    Foreground="{DynamicResource AppTextLeiseBrush}"
+                                                    ToolTip="Zeile löschen" Click="AwLoeschen_Click"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Border Background="{DynamicResource AppAkzentLeiseBrush}" CornerRadius="10"
+                                Padding="16" Margin="0,14,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel Margin="0,0,26,0">
+                                        <TextBlock Text="ΣDU" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="AwSummeDu" Text="0 l/s" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppTextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,26,0">
+                                        <TextBlock Text="Qww = K·√ΣDU" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="AwQww" Text="—" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppKupferBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,26,0">
+                                        <TextBlock Text="+ Dauerabfluss Qc" Style="{StaticResource FeldLabel}"/>
+                                        <TextBox x:Name="AwQcBox" Width="80" Style="{StaticResource Eingabe}"
+                                                 Text="{Binding Aw.Qc, UpdateSourceTrigger=PropertyChanged}"
+                                                 TextChanged="AwQc_Changed"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Qtot = Qww + Qc" Style="{StaticResource FeldLabel}"/>
+                                        <TextBlock x:Name="AwQtot" Text="—" FontSize="19" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppKupferBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <TextBlock FontSize="11.5" Margin="0,10,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource AppTextLeiseBrush}"
+                                           Text="Qww ist nie kleiner als das größte Einzel-DU. Qc (Kondensat/Gewerbe/Pumpen) wird unvermindert addiert."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="SONSTIGES" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,14,0,6"/>
+                        <TextBox Style="{StaticResource Eingabe}" AcceptsReturn="True" MinHeight="46"
+                                 TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                 ToolTip="Materialwechsel/Bestands-DN, Abscheider, Notüberlauf Flachdach, Regenwasser A/C/r, Reinigungsöffnungen …"
+                                 Text="{Binding Aw.Bemerkung, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="➕ Abwasser in Notiz" Padding="12,7" Click="AwEinfuegen_Click"/>
+                            <Button Content="📋 Kopieren" Padding="12,7" Margin="10,0,0,0" Click="AwKopieren_Click"/>
+                            <TextBlock x:Name="AwHinweis" Text="" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+                <!-- ===== Heizung ===== -->
+                <Expander Style="{StaticResource Abschnitt}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔥 Heizung" Style="{StaticResource TitelText}"/>
+                            <TextBlock x:Name="HeizKopfHinweis" Text="0 Räume" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource UnterTitel}"
+                                   Text="Raumweise überschlägige Heizlast (Fläche × spez. Heizlast). Für die genaue Norm-Heizlast (DIN EN 12831) dient Viptool; hier die Aufnahme + Plausibilisierung."/>
+
+                        <TextBlock Text="RÄUME" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <ComboBox x:Name="HeizRaumVorlageBox" Width="220" Style="{StaticResource EingabeCombo}"
+                                      ItemsSource="{x:Static svc:ErfassungStore.RaumKatalogNamen}"/>
+                            <Button Content="➕ Raum" Padding="10,5" Margin="8,0,0,0"
+                                    FontWeight="SemiBold" Click="HeizRaumHinzufuegen_Click"/>
+                            <Button Content="➕ Leer" Padding="10,5" Margin="6,0,0,0"
+                                    Click="HeizRaumLeer_Click"/>
+                        </StackPanel>
+
+                        <ItemsControl x:Name="HeizListe">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource AppFlaecheTiefBrush}"
+                                            BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                                            CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,10">
+                                                <Button DockPanel.Dock="Right" Content="✕ entfernen"
+                                                        Padding="8,3" FontSize="12" Cursor="Hand"
+                                                        Click="HeizRaumLoeschen_Click"/>
+                                                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+                                                           Margin="0,0,12,0" FontFamily="Consolas" FontSize="13"
+                                                           FontWeight="Bold"
+                                                           Foreground="{DynamicResource AppKupferBrush}"
+                                                           Text="{Binding Heizlast, StringFormat={}{0:#,##0} W}"/>
+                                                <TextBlock Text="Raum" VerticalAlignment="Center"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource AppTextBrush}"/>
+                                            </DockPanel>
+                                            <WrapPanel>
+                                                <StackPanel Style="{StaticResource Feld}">
+                                                    <TextBlock Text="Raum" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Länge (m)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Laenge, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Breite (m)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Breite, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Höhe (m)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Hoehe, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Soll-Temp (°C)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding SollTemp, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="spez. Last (W/m²)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             ToolTip="Neubau ~50, saniert ~80, Altbau ungedämmt ~120–150"
+                                                             Text="{Binding SpezHeizlast, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </WrapPanel>
+                                            <WrapPanel>
+                                                <StackPanel Style="{StaticResource Feld}">
+                                                    <TextBlock Text="Heizungsart" Style="{StaticResource FeldLabel}"/>
+                                                    <ComboBox Style="{StaticResource EingabeCombo}"
+                                                              ItemsSource="{x:Static svc:ErfassungStore.Heizungsarten}"
+                                                              SelectedItem="{Binding Heizungsart}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource Feld}" Width="340">
+                                                    <TextBlock Text="Heizkörper-Detail (optional)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             ToolTip="z. B. HK Typ 22, 600×1000, Ventil voreinstellbar"
+                                                             Text="{Binding Heizflaeche, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </WrapPanel>
+
+                                            <TextBlock Text="FENSTER / TÜREN / NISCHEN (einzeln)" FontSize="10.5"
+                                                       FontWeight="SemiBold" Margin="0,4,0,6"
+                                                       Foreground="{DynamicResource AppTextLeiseBrush}"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                <Button Content="➕ Fenster" Tag="Fenster" Padding="9,4" Margin="0,0,6,0"
+                                                        FontSize="12" Click="BauteilHinzufuegen_Click"/>
+                                                <Button Content="➕ Tür" Tag="Tür" Padding="9,4" Margin="0,0,6,0"
+                                                        FontSize="12" Click="BauteilHinzufuegen_Click"/>
+                                                <Button Content="➕ Nische" Tag="Nische" Padding="9,4"
+                                                        FontSize="12" Click="BauteilHinzufuegen_Click"/>
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Bauteile}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{DynamicResource AppFlaecheBrush}"
+                                                                BorderBrush="{DynamicResource AppRandBrush}"
+                                                                BorderThickness="1" CornerRadius="6"
+                                                                Padding="8" Margin="0,0,0,6">
+                                                            <DockPanel>
+                                                                <Button DockPanel.Dock="Right" Content="✕" Width="26"
+                                                                        Height="26" Padding="0" Cursor="Hand"
+                                                                        VerticalAlignment="Center"
+                                                                        Background="Transparent" BorderThickness="0"
+                                                                        Foreground="{DynamicResource AppTextLeiseBrush}"
+                                                                        ToolTip="entfernen" Click="BauteilLoeschen_Click"/>
+                                                                <WrapPanel>
+                                                                    <StackPanel Width="120" Margin="0,0,12,0">
+                                                                        <TextBlock Text="Art" Style="{StaticResource FeldLabel}"/>
+                                                                        <ComboBox Style="{StaticResource EingabeCombo}"
+                                                                                  ItemsSource="{x:Static svc:ErfassungStore.BauteilArten}"
+                                                                                  SelectedItem="{Binding Art}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="90" Margin="0,0,12,0">
+                                                                        <TextBlock Text="Breite (m)" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Breite, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="90" Margin="0,0,12,0">
+                                                                        <TextBlock Text="Höhe (m)" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Hoehe, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Width="220">
+                                                                        <TextBlock Text="Bemerkung (U-Wert, Verglasung …)" Style="{StaticResource FeldLabel}"/>
+                                                                        <TextBox Style="{StaticResource Eingabe}"
+                                                                                 Text="{Binding Bemerkung, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    </StackPanel>
+                                                                </WrapPanel>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="HeizLeer" FontSize="12.5" Margin="2,2,0,0"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"
+                                   Text="Noch keine Räume. Oben einen Raumtyp wählen und „Raum“ hinzufügen."/>
+
+                        <Border Background="{DynamicResource AppAkzentLeiseBrush}" CornerRadius="10"
+                                Padding="16" Margin="0,14,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel Margin="0,0,32,0">
+                                    <TextBlock Text="Gesamt-Heizlast (überschlägig)" Style="{StaticResource FeldLabel}"/>
+                                    <TextBlock x:Name="HeizGesamt" Text="0 kW" FontSize="19" FontWeight="Bold"
+                                               Foreground="{DynamicResource AppKupferBrush}"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Volumenstrom (bei VL/RL-Spreizung)" Style="{StaticResource FeldLabel}"/>
+                                    <TextBlock x:Name="HeizVolumenstrom" Text="—" FontSize="19" FontWeight="Bold"
+                                               Foreground="{DynamicResource AppTextBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="ERZEUGER &amp; NETZ" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,14,0,8"/>
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Wärmeerzeuger (Typ)" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.ErzeugerTypen}"
+                                          SelectedItem="{Binding Heiz.Erzeuger}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Leistung (kW)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.ErzeugerLeistung, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Vorlauf (°C)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.Vorlauf, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Rücklauf (°C)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.Ruecklauf, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Umwälzpumpe (Typ/Modus)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.Pumpe, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Förderhöhe (m)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.Foerderhoehe, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Wasserinhalt (l)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.Wasserinhalt, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="MAG (l)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.MagVolumen, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="MAG-Vordruck (bar)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Heiz.MagVordruck, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </WrapPanel>
+
+                        <TextBlock Text="HYDRAULISCHER ABGLEICH" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,10,0,8"/>
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource Feld}" Width="320">
+                                <TextBlock Text="Verfahren" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.HeizVerfahren}"
+                                          SelectedItem="{Binding Heiz.Verfahren}"/>
+                            </StackPanel>
+                        </WrapPanel>
+                        <TextBox Style="{StaticResource Eingabe}" AcceptsReturn="True" MinHeight="46"
+                                 TextWrapping="Wrap" VerticalContentAlignment="Top" Margin="0,4,0,0"
+                                 ToolTip="Thermostatventile voreinstellbar?, Strangregulierventile, Δp-Regler, Überströmventil, n50/Blower-Door, Luftwechsel/KWL, Wärmebrücken …"
+                                 Text="{Binding Heiz.Bemerkung, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="➕ Heizung in Notiz" Padding="12,7" Click="HeizEinfuegen_Click"/>
+                            <Button Content="📋 Kopieren" Padding="12,7" Margin="10,0,0,0" Click="HeizKopieren_Click"/>
+                            <TextBlock x:Name="HeizHinweis" Text="" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+                <!-- ===== Gas ===== -->
+                <Expander Style="{StaticResource Abschnitt}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔵 Gas" Style="{StaticResource TitelText}"/>
+                            <TextBlock x:Name="GasKopfHinweis" Text="0 Geräte" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource UnterTitel}"
+                                   Text="DVGW-TRGI G 600. Wärmeerzeuger kommt aus der Heizung; zusätzliche Geräte hier ergänzen. Achtung: Nennwärme­BELASTUNG erfassen, nicht -leistung."/>
+
+                        <TextBlock Text="ANSCHLUSS / ZÄHLER" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,0,0,8"/>
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Gasart" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.Gasarten}"
+                                          SelectedItem="{Binding Gas.Gasart}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Druckstufe" Style="{StaticResource FeldLabel}"/>
+                                <ComboBox Style="{StaticResource EingabeCombo}"
+                                          ItemsSource="{x:Static svc:ErfassungStore.Druckstufen}"
+                                          SelectedItem="{Binding Gas.Druckstufe}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Gaszähler (G-Größe)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gas.Zaehler, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Zähler Δp (mbar)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gas.ZaehlerDp, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Gasströmungswächter (Typ/Nennwert)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         ToolTip="z. B. K / M und Nennwert in m³/h, Einbaulage"
+                                         Text="{Binding Gas.Gsw, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource Feld}">
+                                <TextBlock Text="Aufstellraum" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gas.Aufstellraum, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FeldSchmal}">
+                                <TextBlock Text="Raumvolumen (m³)" Style="{StaticResource FeldLabel}"/>
+                                <TextBox Style="{StaticResource Eingabe}"
+                                         Text="{Binding Gas.AufstellraumVolumen, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </WrapPanel>
+
+                        <TextBlock Text="GASGERÄTE" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,10,0,4"/>
+                        <Border x:Name="GasAbgeleitetBox" BorderBrush="{DynamicResource AppRandBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,8"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="GasAbgeleitet" FontSize="13"
+                                       Foreground="{DynamicResource AppTextBrush}"/>
+                        </Border>
+                        <TextBlock Text="Zusätzliche Geräte (falls nicht aus Heizung):" FontSize="11.5"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <ComboBox x:Name="GasVorlageBox" Width="250" Style="{StaticResource EingabeCombo}"
+                                      DisplayMemberPath="Anzeige"/>
+                            <Button Content="➕ Hinzufügen" Padding="10,5" Margin="8,0,0,0"
+                                    FontWeight="SemiBold" Click="GasVorlageHinzufuegen_Click"/>
+                            <Button Content="➕ Leer" Padding="10,5" Margin="6,0,0,0"
+                                    Click="GasLeer_Click"/>
+                        </StackPanel>
+
+                        <ItemsControl x:Name="GasListe">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource AppFlaecheTiefBrush}"
+                                            BorderBrush="{DynamicResource AppRandBrush}" BorderThickness="1"
+                                            CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,10">
+                                                <Button DockPanel.Dock="Right" Content="✕ entfernen"
+                                                        Padding="8,3" FontSize="12" Cursor="Hand"
+                                                        Click="GasLoeschen_Click"/>
+                                                <TextBlock Text="Gasgerät" VerticalAlignment="Center"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource AppTextBrush}"/>
+                                            </DockPanel>
+                                            <WrapPanel>
+                                                <StackPanel Style="{StaticResource Feld}">
+                                                    <TextBlock Text="Gerät" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Bezeichnung, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Anzahl" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Anzahl, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource FeldSchmal}">
+                                                    <TextBlock Text="Belastung (kW)" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             ToolTip="Nennwärmebelastung je Gerät (nicht -leistung!)"
+                                                             Text="{Binding Belastung, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource Feld}">
+                                                    <TextBlock Text="Kategorie" Style="{StaticResource FeldLabel}"/>
+                                                    <ComboBox Style="{StaticResource EingabeCombo}"
+                                                              ItemsSource="{x:Static svc:ErfassungStore.Geraetekategorien}"
+                                                              SelectedItem="{Binding Kategorie}"/>
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource Feld}">
+                                                    <TextBlock Text="Aufstellraum" Style="{StaticResource FeldLabel}"/>
+                                                    <TextBox Style="{StaticResource Eingabe}"
+                                                             Text="{Binding Aufstellraum, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="GasLeer" FontSize="12.5" Margin="2,2,0,0"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}"
+                                   Text="Noch keine Gasgeräte. Oben ein Gerät wählen und „Hinzufügen“."/>
+
+                        <Border Background="{DynamicResource AppAkzentLeiseBrush}" CornerRadius="10"
+                                Padding="16" Margin="0,14,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel Margin="0,0,32,0">
+                                    <TextBlock Text="Summe Nennbelastung" Style="{StaticResource FeldLabel}"/>
+                                    <TextBlock x:Name="GasSummeBelastung" Text="0 kW" FontSize="19" FontWeight="Bold"
+                                               Foreground="{DynamicResource AppKupferBrush}"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Verbrennungsluft (1,6 m³/h·kW)" Style="{StaticResource FeldLabel}"/>
+                                    <TextBlock x:Name="GasVerbrennungsluft" Text="—" FontSize="19" FontWeight="Bold"
+                                               Foreground="{DynamicResource AppTextBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="SONSTIGES / PRÜFUNG" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppTextLeiseBrush}" Margin="0,14,0,6"/>
+                        <TextBox Style="{StaticResource Eingabe}" AcceptsReturn="True" MinHeight="46"
+                                 TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                 ToolTip="Bestands-DN/Werkstoff, Reservegeräte, Abgasführung, Dichtheits-/Gebrauchsfähigkeitsprüfung, Lüftungsöffnungen ≥150 cm² …"
+                                 Text="{Binding Gas.Bemerkung, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="➕ Gas in Notiz" Padding="12,7" Click="GasEinfuegen_Click"/>
+                            <Button Content="📋 Kopieren" Padding="12,7" Margin="10,0,0,0" Click="GasKopieren_Click"/>
+                            <TextBlock x:Name="GasHinweis" Text="" Style="{StaticResource HinweisText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

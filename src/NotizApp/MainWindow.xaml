@@ -114,6 +114,7 @@
                     <ListBoxItem Content="🎈 Ausdehnungsgefäß"/>
                     <ListBoxItem Content="🔄 Einheiten-Umrechner"/>
                     <ListBoxItem Content="🔎 Gerätewissen"/>
+                    <ListBoxItem Content="📋 SHK-Aufnahme"/>
                 </ListBox>
             </StackPanel>
 
@@ -282,6 +283,7 @@
             <controls:AusdehnungsgefaessRechner x:Name="AusdehnungTool" Visibility="Collapsed"/>
             <controls:EinheitenUmrechner x:Name="UmrechnerTool" Visibility="Collapsed"/>
             <controls:GeraetewissenTool x:Name="GeraetewissenTool" Visibility="Collapsed"/>
+            <controls:ErfassungTool x:Name="ErfassungTool" Visibility="Collapsed"/>
 
             <!-- Schwebende Chat-Bubble: immer erreichbar, auch ohne offene Notiz -->
             <Button x:Name="ChatBubble" Width="46" Height="46"
