@@ -1218,6 +1218,13 @@ public partial class NoteEditor : UserControl
     static void WendeLinkScrollAn(Border rahmen, Image bild, LinkElementVm vm)
     {
         if (bild.RenderTransform is not TranslateTransform verschiebung) return;
+        if (verschiebung.IsFrozen)
+        {
+            // Aus dem DataTemplate kommt der Transform eingefroren und von allen
+            // Karten geteilt — je Karte eine eigene, schreibbare Kopie einsetzen.
+            verschiebung = verschiebung.Clone();
+            bild.RenderTransform = verschiebung;
+        }
         double ueberstand = Math.Max(0, bild.ActualHeight - rahmen.ActualHeight);
         verschiebung.Y = vm.VorschauEingepasst
             ? 0

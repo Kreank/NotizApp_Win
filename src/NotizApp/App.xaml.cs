@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using NotizApp.Services;
 
@@ -25,10 +26,38 @@ public partial class App : Application
     MainWindow? _hauptfenster;
     QuickNoteWindow? _quickFenster;
 
+    /// <summary>Fehlerprotokoll neben der installierten App.</summary>
+    static string FehlerLogPfad => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "NotizApp", "fehler.log");
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         bool trayStart = e.Args.Contains("--tray");
+
+        // Fehler im UI-Thread abfangen: protokollieren, melden, weiterlaufen —
+        // statt die App wortlos zu schließen.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Protokolliere("UI-Thread", args.Exception);
+            args.Handled = true;
+            MessageBox.Show(
+                "In der NotizApp ist ein Fehler aufgetreten. Die Notiz ist nicht verloren, " +
+                "aber der letzte Schritt wurde nicht ausgeführt.\n\n" +
+                $"{args.Exception.GetType().Name}: {args.Exception.Message}\n\n" +
+                $"Einzelheiten: {FehlerLogPfad}",
+                "NotizApp", MessageBoxButton.OK, MessageBoxImage.Warning);
+        };
+
+        // Hintergrund-Threads lassen sich nicht retten — wenigstens die Spur sichern.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            Protokolliere("Hintergrund-Thread", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Protokolliere("Task", args.Exception);
+            args.SetObserved();
+        };
 
         // Farbsystem „Kupfer & Wasser" anwenden und bei Theme-Wechsel nachziehen
         Farbschema.Anwenden(Resources);
@@ -98,6 +127,24 @@ public partial class App : Application
 
         if (!trayStart)
             ZeigeHauptfenster();
+    }
+
+    /// <summary>Fehler mit Zeitstempel und vollem Stack anhängen. Darf selbst nie werfen.</summary>
+    static void Protokolliere(string quelle, Exception? fehler)
+    {
+        if (fehler is null) return;
+        try
+        {
+            var pfad = FehlerLogPfad;
+            Directory.CreateDirectory(Path.GetDirectoryName(pfad)!);
+            File.AppendAllText(pfad,
+                $"=== {DateTime.Now:yyyy-MM-dd HH:mm:ss} [{quelle}] ==={Environment.NewLine}" +
+                $"{fehler}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Ohne Protokoll weiterlaufen ist besser als deswegen abzustürzen.
+        }
     }
 
     /// <summary>Nach Änderungen im Einstellungsdialog anwenden (aktuell: Hotkey an/aus).</summary>
