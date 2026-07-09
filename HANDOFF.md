@@ -1,4 +1,4 @@
-# HANDOFF — Stand 07.07.2026
+# HANDOFF — Stand 09.07.2026
 
 ## Kontext
 
@@ -45,8 +45,57 @@ ASCII-Umlaute, Claude-Trailer), App nach jedem Build neu starten, damit er sofor
   schmale Rails, Zustand in settings.json); Fokus-Modus F11; Notizbücher per Rechtsklick
   umbenennen/löschen/färben (10 Farben, Punkt in Sidebar + Farbbalken in der Notizliste,
   Mapping in settings.json); Entf löscht markierte Notiz; Chat-Panel-Zustand persistiert.
+- ✅ **WERKZEUGE-Tab** (Sidebar unter ANSICHTEN): kleine SHK-Rechner als `UserControl`s,
+  über `WerkzeugListe` + Array `Werkzeuge` (MainWindow) per Index umgeschaltet. Bestand:
+  Heizlast, Volumenstrom, Wasserinhalt, Ausdehnungsgefäß, Einheiten-Umrechner,
+  Gerätewissen. Neues Tool = UserControl + Eintrag in `WerkzeugListe` (XAML) + Array +
+  `ErgebnisEinfuegen`-Verdrahtung.
+- ✅ **SHK-Aufnahme 📋** (Commit `9b9de6a`, 09.07.): siehe eigener Abschnitt unten.
 - ⚠️ **Vom Nutzer noch nicht rückgemeldet:** Wie sich der neue Look in beiden Themes
   anfühlt (Glow zu stark/schwach?) und ob noch konkrete unlesbare Stellen existieren.
+
+## SHK-Aufnahme-Werkzeug (neu, 09.07.2026)
+
+Vollständiger **Bestandsaufnahme-Assistent** für die Baustelle — Kernprinzip (mehrfach vom
+Nutzer geschärft): **nur erfassen, was man NUR vor Ort bekommt** (Mengen, Längen, Höhen,
+Druck). Nennweiten und Büro-/Rechendaten macht **Viega Viptool Master** — nicht abfragen.
+Ableiten statt doppelt erfassen. UI muss schlank & intuitiv sein („Zeit ist Geld").
+
+- **Dateien:** `Controls/ErfassungTool.xaml(.cs)` (UI, einklappbare Expander, editierbare
+  Karten), `Services/ErfassungService.cs` (Modell + `ErfassungStore` Persistenz +
+  Kataloge/Formeln), `Services/TrinkwasserService.cs` (nur noch DU-Katalog +
+  Spitzenvolumenstrom-Formel/Koeffizienten). **Namensraum `Erfassung*`, NICHT `Aufnahme*`**
+  — `AufnahmeService` ist die Audio-Gesprächsaufnahme!
+- **Persistenz:** mehrere benannte Vorhaben → `%APPDATA%\NotizApp\auslegung\aufnahme.json`,
+  Autosave (debounced 800 ms) über `ErfassungBasis.Geaendert` + `PropertyChanged`.
+- **Struktur:** ein `Erfassung`-Vorhaben = Szenario-Schalter (Bestand-Begehung / Neubau
+  alle Daten / Neubau Teildaten) + gemeinsamer **Gebäude-Kopf** (inkl. Einspeisedruck) +
+  je Gewerk:
+  - **Trinkwasser:** `Wohneinheit` (×N-Multiplikator für gleiche Wohnungen) → dyn. `Ort`e
+    (Bad/Küche/Gäste-WC, Vorlagen in `OrtVorlagen`) → gezählte Entnahmestellen
+    (`Fixturen`: WT/Dusche/Wanne/WC/WM/GSW/Küchenspüle). Anschlussleitung je Wohneinheit
+    (Länge/Höhe/Bögen/T-Stücke/Reduzierungen, Bestand DN/Material einklappbar). Live ΣVR +
+    Vs = a·(ΣVR)^b−c (DIN 1988-300, verifizierte Koeffizienten je Gebäudeart).
+  - **Abwasser:** leitet sich automatisch aus den TW-Entnahmestellen ab
+    (`AbwasserAusWohneinheiten` → Qww = K·√ΣDU, floored auf größtes Einzel-DU); nur reine
+    Abläufe ohne Zapfstelle (`AbwasserExtraKatalog`) werden ergänzt. K aus Nutzung.
+  - **Gas:** Wärmeerzeuger wird aus der Heizung abgeleitet (wenn Erzeuger-Typ „Gas"),
+    Zusatzgeräte manuell; Verbrennungsluft 1,6 m³/h·kW.
+  - **Heizung:** Räume (L×B → überschlägige Heizlast Fläche×spez. Last), Fenster/Türen/
+    Nischen einzeln als `Bauteil` (Art/Breite/Höhe/Bemerkung), Erzeuger/Netz, Abgleich A/B.
+- **Verschachtelte Sammlungen** (Wohneinheit→Orte, Raum→Bauteile) sind
+  `ObservableCollection`; das Tool abonniert Collection+Item-Changes und meldet sie über
+  `MeldeGeaendert()` an den Parent → Autosave. Beim Vorhaben-Wechsel `LoeseBindung()`.
+- **Export:** je Gewerk ein Markdown-Block in die aktuelle Notiz (`ErgebnisEinfuegen`).
+
+**Verifikations-Trick (wichtig):** WPF-Template-Fehler crashen erst beim Sichtbarwerden
+(nicht beim Build). Deshalb vor dem Ausliefern headless prüfen mit einem **net9-Rendertest**
+(Wegwerf-Projekt mit `<ProjectReference>` auf NotizApp.csproj, `[STAThread]` → Control `new`en,
+ItemsControls per `FindName` füllen, `Measure/Arrange/UpdateLayout`). Windows PowerShell 5.1
+geht NICHT (lädt PresentationFramework 9.0 nicht). Lag im Session-Scratchpad unter `rendertest/`.
+Klassischer Fehler war ein eigener Expander-Template mit `ContentPresenter ContentSource="Header"`
+(löst gegen den ToggleButton auf) → stattdessen `Content="{TemplateBinding Header}"` + schlichter
+`ContentPresenter`.
 
 ## Dateiformat (seit Freiform-Umbau)
 
@@ -87,7 +136,11 @@ nur den Auftragstext.
   Umwandlung, KI-Menü
 - `Controls/ElementVms.cs` — TextElementVm/BildElementVm/DateiElementVm + PapierMuster
 - `Controls/KiChatPanel.xaml(.cs)` — Chat (➤ Claude / 🎨 Codex), Datei-Anhänge
-- `MainWindow.xaml(.cs)` — Spalten inkl. Chat, Rails, Glow-Animation, Notizbuch-Menüs
+- `MainWindow.xaml(.cs)` — Spalten inkl. Chat, Rails, Glow-Animation, Notizbuch-Menüs,
+  WERKZEUGE-Liste + Array `Werkzeuge`
+- `Controls/ErfassungTool.xaml(.cs)` + `Services/ErfassungService.cs` — SHK-Aufnahme
+  (siehe eigener Abschnitt); `Services/TrinkwasserService.cs` — DU-Katalog + Vs-Formel;
+  weitere Rechner unter `Controls/*Rechner.xaml`
 - `docker/claude/Dockerfile` + `docker/einrichten.ps1` — Container (pandoc, weasyprint,
   graphviz, matplotlib, openpyxl, librsvg, curl)
 
@@ -125,11 +178,24 @@ nur den Auftragstext.
 - **Fotorealistische Bilder** laufen über Codex (🎨). Falls der Nutzer mehr Kontrolle will:
   OpenAI-API (gpt-image-1) als Zusatzdienst — nur nach Rückfrage (Kosten).
 - V1.1 laut Roadmap: Export (PDF/Druck), Feinschliff Vorlagen.
+- **SHK-Aufnahme — als Nächstes gewünscht (noch offen):** **Notiz ↔ Aufnahme-Vorhaben
+  verlinken**, damit Raumskizzen/Fotos als Notiz am Vorhaben hängen (der Nutzer skizziert
+  Räume/Nischen lieber als Bild in einer Notiz). Weitere offene Ideen: Hersteller-DU-Lookup
+  fürs Trinkwasser (Feld ist da, Auto-Fill fehlt), Heizkörper als eigenes Sub-Modell statt
+  Freitext, echte DIN-1988-300-Vs-Koeffizienten sind für alle 5 Gebäudearten verifiziert
+  (Wohngeb./Pflegeheim/Krankenhaus/Hotel/Schule) — für weitere Gebäudearten „Eigene Werte".
+- **SHK-Aufnahme — Arbeitsprinzip:** Feldliste vor größerem Bau mit dem Nutzer gegenprüfen
+  (er ist Fachmann). Historie: 1. Wurf zu dünn (nur DU-Summe), 2. zu überladen (Bürodaten
+  mit drin) — Mitte treffen: nötigste Vor-Ort-Werte, gut geführt. Er testet sofort und
+  meldet direkt ("gefällt mir nicht" = Arbeitsauftrag).
 
 ## Nutzer-Präferenzen (Kurzfassung)
 
 Deutsch; direkt umsetzen statt lange fragen (bei echten Architektur-Weichen kurz fragen —
 AskUserQuestion hat sich bewährt); Datenschutz-Trennung ernst nehmen; er testet selbst
 sofort in der laufenden App und meldet Eindrücke ("gefällt mir nicht" = ernst gemeinter
-Arbeitsauftrag). Memory-Dateien unter `~/.claude/projects/C--Dev-NotizApp-Win/memory/`
-sind aktuell (user-context-shk, notizapp-projekt).
+Arbeitsauftrag). Memory-Dateien unter `~/.claude/projects/D--Mitra-NotizApp-Win/memory/`
+sind aktuell (u.a. werkzeuge-tab, aufnahme-vollstaendigkeit, wpf-control-rendertest,
+ui-vorlieben) — MEMORY.md ist der Index. Projektpfad ist jetzt `D:\Mitra\NotizApp_Win`
+(nicht mehr `C:\Dev`); Release-Installation über `.\aktualisieren.ps1`
+(→ `%LOCALAPPDATA%\NotizApp`, beendet + startet die App).
