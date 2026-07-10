@@ -634,25 +634,34 @@
 
                 <Separator Margin="6,2" Width="1"/>
 
+                <Button x:Name="UndoButton" Style="{StaticResource WerkzeugButton}"
+                        Content="↶" IsEnabled="False" ToolTip="Rückgängig (Strg+Z)"
+                        Click="Undo_Click"/>
+                <Button x:Name="RedoButton" Style="{StaticResource WerkzeugButton}"
+                        Content="↷" IsEnabled="False" ToolTip="Wiederholen (Strg+Y)"
+                        Click="Redo_Click"/>
+
+                <Separator Margin="6,2" Width="1"/>
+
                 <ToggleButton x:Name="AuswahlToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="➤" IsChecked="True"
-                              ToolTip="Auswählen/Tippen: Text bearbeiten, Objekte verschieben und skalieren. Mausklick auf die freie Fläche = Textfeld zum Lostippen (mit dem Stift: Doppeltipp)."
+                              ToolTip="Auswählen/Tippen (A): Klick wählt Striche und Objekte, Ziehen auf freier Fläche spannt ein Auswahlrechteck auf. Mausklick auf die freie Fläche = Textfeld zum Lostippen (mit dem Stift: Doppeltipp)."
                               Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="StiftToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="🖊" Checked="Werkzeug_Checked"
-                              ToolTip="Stift. Mit Digitizer-Stift gilt: Der Stift zeichnet, die Maus tippt und bearbeitet Text — ohne Werkzeugwechsel."/>
+                              ToolTip="Stift (S). Mit Digitizer-Stift gilt: Der Stift zeichnet, die Maus tippt und bearbeitet Text — ohne Werkzeugwechsel."/>
                 <ToggleButton x:Name="MarkerToggle" Style="{StaticResource WerkzeugToggle}"
-                              Content="🖍" ToolTip="Textmarker" Checked="Werkzeug_Checked"/>
+                              Content="🖍" ToolTip="Textmarker (M)" Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="RadiererToggle" Style="{StaticResource WerkzeugToggle}"
-                              Content="⌫" ToolTip="Radierer: ganze Striche" Checked="Werkzeug_Checked"/>
+                              Content="⌫" ToolTip="Radierer: ganze Striche (R)" Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="PunktRadiererToggle" Style="{StaticResource WerkzeugToggle}"
-                              Content="◌" ToolTip="Radierer: punktgenau (Größe über den Regler)"
+                              Content="◌" ToolTip="Radierer: punktgenau (P) — Größe über den Regler"
                               Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="LassoToggle" Style="{StaticResource WerkzeugToggle}"
-                              Content="⬚" ToolTip="Lasso-Auswahl" Checked="Werkzeug_Checked"/>
+                              Content="⬚" ToolTip="Lasso-Auswahl (L)" Checked="Werkzeug_Checked"/>
                 <ToggleButton x:Name="FormToggle" Style="{StaticResource WerkzeugToggle}"
                               Content="▭" Checked="Werkzeug_Checked" Click="FormToggle_Click"
-                              ToolTip="Formen: Rechteck, Quadrat, Ellipse, Kreis, Dreieck, Linien (auch gestrichelt/gepunktet). Form wählen, dann auf der Fläche aufziehen — gezeichnet wird in der Stiftfarbe."/>
+                              ToolTip="Formen (F): Rechteck, Quadrat, Ellipse, Kreis, Dreieck, Linien (auch gestrichelt/gepunktet). Auf der Fläche aufziehen — gezeichnet wird in der Stiftfarbe. Erneuter Klick auf den Button wechselt die Form. Zoom: Strg+Mausrad, Strg+0 = 100 %."/>
                 <Button x:Name="UmwandelnButton" Style="{StaticResource WerkzeugButton}"
                         Content="⬚→A" IsEnabled="False"
                         ToolTip="Markierte Handschrift in Tipptext umwandeln (übernimmt die Stiftfarbe)"

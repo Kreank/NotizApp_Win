@@ -82,6 +82,27 @@ public partial class NoteEditor : UserControl
         };
         _erkennungTimer.Tick += ErkennungTimer_Tick;
 
+        _standTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        _standTimer.Tick += (_, _) => { _standTimer.Stop(); _stand = ErfasseStand(); };
+
+        // Zoom: Strg+Mausrad (zum Mauszeiger hin), Strg+0 = 100 %,
+        // Pinch mit zwei Fingern (inkl. Zwei-Finger-Verschieben)
+        Flaeche.LayoutTransform = _zoomTransform;
+        Scroller.PreviewMouseWheel += Scroller_MausRad;
+        Scroller.PreviewTouchDown += Pinch_TouchDown;
+        Scroller.PreviewTouchMove += Pinch_TouchMove;
+        Scroller.PreviewTouchUp += Pinch_TouchUp;
+        // Werkzeug-Kürzel (A/S/M/R/P/L/F) — nur wenn gerade kein Text getippt wird
+        KeyDown += Editor_KeyDown;
+        // Strg+Z/Strg+Y auf Canvas-Ebene; ein fokussiertes Textfeld behält sein
+        // eigenes (Zeichen-)Undo, weil die TextBox den Befehl zuerst bekommt
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Undo,
+            (_, _) => Undo(), (_, a) => a.CanExecute = _undo.Count > 0));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Redo,
+            (_, _) => Redo(), (_, a) => a.CanExecute = _redo.Count > 0));
+        InputBindings.Add(new KeyBinding(ApplicationCommands.Redo,
+            Key.Z, ModifierKeys.Control | ModifierKeys.Shift));
+
         _strokes.StrokesChanged += Strokes_Changed;
         Flaeche.Strokes = _strokes;
         Flaeche.StylusInRange += (_, _) => { _stiftGesehen = true; _stiftNah = true; WendeWerkzeugAn(); };
@@ -91,6 +112,11 @@ public partial class NoteEditor : UserControl
         Flaeche.StylusInAirMove += StiftKnopf_Modus;
         // Umgedrehter Stift (Radierer-Ende, z.B. Surface Pen) radiert ganze Striche
         Flaeche.EditingModeInverted = InkCanvasEditingMode.EraseByStroke;
+        // Per Auswahl (Lasso/Rechteck) verschobene Objekte in die VMs zurückschreiben —
+        // sonst steht beim Speichern noch die alte Position in der Notiz
+        Flaeche.SelectionMoved += Selektion_Uebernehmen;
+        Flaeche.SelectionResized += Selektion_Uebernehmen;
+        Flaeche.PreviewKeyDown += Flaeche_Taste;
         WendeWerkzeugAn(); // Auswahl-Modus aktivieren (InkCanvas-Default wäre Zeichnen)
 
         IsEnabled = false; // bis eine Notiz geladen wird
@@ -146,26 +172,7 @@ public partial class NoteEditor : UserControl
             SetzeStrokes(note.Tinte ?? new StrokeCollection());
 
             foreach (var el in note.Elemente)
-            {
-                ElementVm vm = el switch
-                {
-                    TextElement t => new TextElementVm(t),
-                    BildElement b => new BildElementVm(b),
-                    DateiElement d => new DateiElementVm(d),
-                    LinkElement l => new LinkElementVm(l),
-                    TabelleElement tab => new TabelleElementVm(tab),
-                    _ => throw new InvalidOperationException(),
-                };
-                if (vm is BildElementVm bild)
-                    bild.LadeBild(NotizOrdner);
-                if (vm is DateiElementVm datei)
-                    _ = datei.LadeVorschauAsync(NotizOrdner);
-                if (vm is LinkElementVm link)
-                    link.LadeVorschau(NotizOrdner);
-                if (vm is TabelleElementVm tabelle)
-                    tabelle.SetzeOrdner(NotizOrdner);
-                FuegeElementHinzu(vm);
-            }
+                FuegeElementHinzu(ErzeugeVm(el));
             // Leere Notiz: gleich ein Textfeld zum Lostippen anbieten
             if (_elemente.Count == 0)
                 FuegeElementHinzu(new TextElementVm { X = 0, Y = 8, Breite = 620 });
@@ -176,6 +183,36 @@ public partial class NoteEditor : UserControl
         {
             _laden = false;
         }
+
+        // Undo-Verlauf gehört zur Notiz — beim Wechsel frisch beginnen
+        _undo.Clear();
+        _redo.Clear();
+        _standTimer.Stop();
+        _stand = note is null ? null : ErfasseStand();
+        AktualisiereUndoKnoepfe();
+    }
+
+    /// <summary>Element-VM aus dem gespeicherten Modell aufbauen (Laden + Undo).</summary>
+    ElementVm ErzeugeVm(NoteElement el)
+    {
+        ElementVm vm = el switch
+        {
+            TextElement t => new TextElementVm(t),
+            BildElement b => new BildElementVm(b),
+            DateiElement d => new DateiElementVm(d),
+            LinkElement l => new LinkElementVm(l),
+            TabelleElement tab => new TabelleElementVm(tab),
+            _ => throw new InvalidOperationException(),
+        };
+        if (vm is BildElementVm bild)
+            bild.LadeBild(NotizOrdner);
+        if (vm is DateiElementVm datei)
+            _ = datei.LadeVorschauAsync(NotizOrdner);
+        if (vm is LinkElementVm link)
+            link.LadeVorschau(NotizOrdner);
+        if (vm is TabelleElementVm tabelle)
+            tabelle.SetzeOrdner(NotizOrdner);
+        return vm;
     }
 
     void SetzeStrokes(StrokeCollection strokes)
@@ -202,8 +239,100 @@ public partial class NoteEditor : UserControl
     void MeldeAenderung()
     {
         if (_laden || _konvertiere) return;
+        MerkeUndoStand();
         NotizGeaendert?.Invoke();
     }
+
+    // ---------- Undo/Redo (Strg+Z / Strg+Y) ----------
+    // Snapshot-Ansatz: Vor jedem Änderungs-Schub wird der letzte stabile Stand
+    // (Elemente als Modelle + Tinte als Klon) auf den Undo-Stapel gelegt.
+    // Änderungen innerhalb von ~0,7 s zählen als ein Schritt (z.B. Tippen).
+    // Getippter Text im fokussierten Feld nutzt weiter das native TextBox-Undo.
+
+    sealed record CanvasStand(List<NoteElement> Elemente, StrokeCollection Tinte);
+
+    readonly List<CanvasStand> _undo = new();
+    readonly List<CanvasStand> _redo = new();
+    CanvasStand? _stand;                 // Stand nach dem letzten abgeschlossenen Schub
+    readonly DispatcherTimer _standTimer; // läuft ⇒ Schub ist noch offen
+    const int UndoTiefe = 50;
+
+    CanvasStand ErfasseStand() => new(
+        _elemente.Select(vm => vm.ZuModel()).ToList(),
+        _strokes.Clone());
+
+    void MerkeUndoStand()
+    {
+        if (_stand is not null && !_standTimer.IsEnabled)
+        {
+            _undo.Add(_stand);
+            if (_undo.Count > UndoTiefe) _undo.RemoveAt(0);
+            _redo.Clear();
+            AktualisiereUndoKnoepfe();
+        }
+        _standTimer.Stop();
+        _standTimer.Start();
+    }
+
+    /// <summary>Offenen Schub abschließen, damit _stand den aktuellen Zustand hat.</summary>
+    void SchliesseUndoSchub()
+    {
+        if (!_standTimer.IsEnabled) return;
+        _standTimer.Stop();
+        _stand = ErfasseStand();
+    }
+
+    void Undo()
+    {
+        SchliesseUndoSchub();
+        if (_undo.Count == 0 || _stand is null) return;
+        _redo.Add(_stand);
+        var ziel = _undo[^1];
+        _undo.RemoveAt(_undo.Count - 1);
+        StelleStandHer(ziel);
+    }
+
+    void Redo()
+    {
+        if (_redo.Count == 0) return;
+        SchliesseUndoSchub();
+        if (_stand is not null) _undo.Add(_stand);
+        var ziel = _redo[^1];
+        _redo.RemoveAt(_redo.Count - 1);
+        StelleStandHer(ziel);
+    }
+
+    void StelleStandHer(CanvasStand s)
+    {
+        _laden = true;
+        try
+        {
+            foreach (var vm in _elemente.ToList())
+                EntferneElement(vm);
+            foreach (var el in s.Elemente)
+                FuegeElementHinzu(ErzeugeVm(el));
+            // Klon einsetzen, damit der Stapel-Eintrag unangetastet bleibt
+            SetzeStrokes(s.Tinte.Clone());
+            _erkennungPending.Clear();
+            PasseHoeheAn();
+        }
+        finally
+        {
+            _laden = false;
+        }
+        _stand = ErfasseStand();
+        AktualisiereUndoKnoepfe();
+        NotizGeaendert?.Invoke(); // Autosave anstoßen — ohne neuen Undo-Eintrag
+    }
+
+    void AktualisiereUndoKnoepfe()
+    {
+        if (UndoButton is not null) UndoButton.IsEnabled = _undo.Count > 0;
+        if (RedoButton is not null) RedoButton.IsEnabled = _redo.Count > 0;
+    }
+
+    void Undo_Click(object sender, RoutedEventArgs e) => Undo();
+    void Redo_Click(object sender, RoutedEventArgs e) => Redo();
 
     /// <summary>Schreibt UI-Zustand zurück in die Note (vor dem Speichern aufrufen).</summary>
     public void UebernehmeInNote()
@@ -327,7 +456,8 @@ public partial class NoteEditor : UserControl
     /// <summary>Fläche wächst mit dem Inhalt mit (plus Platz zum Weiterschreiben).</summary>
     void PasseHoeheAn()
     {
-        double ziel = Math.Max(BenoetigteHoehe() + 400, Scroller.ViewportHeight - 24);
+        // Viewport ist in Bildschirm-Pixeln, die Fläche in Canvas-Einheiten → Zoom herausrechnen
+        double ziel = Math.Max(BenoetigteHoehe() + 400, Scroller.ViewportHeight / _zoom - 24);
         if (double.IsNaN(Flaeche.Height) || Math.Abs(Flaeche.Height - ziel) > 1)
             Flaeche.Height = ziel;
     }
@@ -347,14 +477,51 @@ public partial class NoteEditor : UserControl
             return;
         }
 
-        // Klick auf freie Fläche = Textfeld zum Lostippen.
-        // Maus: Einfachklick reicht. Stift/Finger (StylusDevice gesetzt): Doppeltipp,
-        // damit ein einzelner Tipp im Auswahl-Modus nicht ständig Felder anlegt.
+        // Pfeil-Werkzeug (Auswahl/Tippen): Down merken — ob es ein Klick
+        // (Textfeld/Strich wählen) oder ein Aufziehen (Auswahlrechteck) wird,
+        // entscheidet sich in MouseMove/MouseUp. Big-Player-Muster: Klick wählt,
+        // Ziehen auf freier Fläche spannt ein Auswahlrechteck über alles darin.
         if (AktuellerModus() != InkCanvasEditingMode.None) return;
+        if (FormToggle.IsChecked == true) return; // Form ohne gewählten Typ: nichts tun
         if (IstInElement(e.OriginalSource)) return;
-        if (e.StylusDevice is not null && e.ClickCount != 2) return;
 
-        var p = e.GetPosition(Flaeche);
+        // Läuft schon eine Auswahl, gehören Klicks der InkCanvas-Auswahl
+        // (verschieben, Griffe, daneben klicken = abwählen)
+        if (Flaeche.GetSelectedStrokes().Count > 0 ||
+            Flaeche.GetSelectedElements().Count > 0) return;
+
+        _auswahlStart = e.GetPosition(Flaeche);
+        _auswahlAktiv = true;
+        _auswahlStift = e.StylusDevice is not null;
+        _auswahlDoppel = e.ClickCount == 2;
+        Flaeche.CaptureMouse();
+        e.Handled = true;
+    }
+
+    // ---------- Pfeil-Werkzeug: Klick wählt, Ziehen spannt ein Auswahlrechteck ----------
+
+    Point _auswahlStart;
+    bool _auswahlAktiv;   // Down auf freier Fläche, Up steht noch aus
+    bool _auswahlStift;   // Eingabe kam vom Stift/Finger (Doppeltipp-Regel fürs Textfeld)
+    bool _auswahlDoppel;  // ClickCount == 2 beim Down
+    System.Windows.Shapes.Rectangle? _auswahlRahmen;
+
+    /// <summary>Klick ohne Ziehen: Strich unterm Zeiger auswählen, sonst Textfeld anlegen.</summary>
+    void KlickAufFreieFlaeche(Point p)
+    {
+        // Klick auf Handschrift wählt den Strich aus (statt ein Textfeld darüber zu legen)
+        var getroffen = Flaeche.Strokes.HitTest(p, 8);
+        if (getroffen.Count > 0)
+        {
+            Flaeche.Select(getroffen);
+            Flaeche.Focus();
+            return;
+        }
+
+        // Freie Fläche = Textfeld zum Lostippen.
+        // Maus: Einfachklick reicht. Stift/Finger: Doppeltipp, damit ein
+        // einzelner Tipp nicht ständig Felder anlegt.
+        if (_auswahlStift && !_auswahlDoppel) return;
         FuegeElementHinzu(new TextElementVm
         {
             X = Math.Max(0, p.X),
@@ -362,7 +529,26 @@ public partial class NoteEditor : UserControl
             Breite = 320,
         }, fokussieren: true);
         MeldeAenderung();
-        e.Handled = true;
+    }
+
+    /// <summary>Alles im Rechteck auswählen (Striche + Objekte) — gleiche
+    /// Auswahl-Mechanik wie das Lasso, also verschieb-, lösch- und umwandelbar.</summary>
+    void WaehleImRechteck(Rect r)
+    {
+        var strokes = new StrokeCollection(
+            Flaeche.Strokes.Where(s => r.IntersectsWith(s.GetBounds())));
+        var elemente = _hosts.Values
+            .Where(h =>
+            {
+                double x = InkCanvas.GetLeft(h), y = InkCanvas.GetTop(h);
+                if (double.IsNaN(x) || double.IsNaN(y)) return false;
+                return r.IntersectsWith(new Rect(x, y, h.ActualWidth, h.ActualHeight));
+            })
+            .Cast<UIElement>()
+            .ToList();
+        if (strokes.Count == 0 && elemente.Count == 0) return;
+        Flaeche.Select(strokes, elemente);
+        Flaeche.Focus(); // damit Entf sofort funktioniert
     }
 
     void Muster_Click(object sender, RoutedEventArgs e)
@@ -811,8 +997,12 @@ public partial class NoteEditor : UserControl
             return;
         }
         _farbe = hex;
-        // Farbwahl aktiviert den Stift — außer der Marker ist gerade aktiv (der färbt mit)
-        if (MarkerToggle.IsChecked != true)
+        // Farbe ist eine Eigenschaft des Zeichenwerkzeugs, kein Werkzeugwechsel:
+        // Stift, Marker und Form bleiben aktiv und übernehmen nur die neue Farbe.
+        // Nur wo Farbe nichts bewirkt (Auswahl, Radierer, Lasso) wechselt die
+        // Farbwahl zum Stift — so machen es auch OneNote & Co.
+        if (StiftToggle.IsChecked != true && MarkerToggle.IsChecked != true &&
+            FormToggle.IsChecked != true)
             StiftToggle.IsChecked = true;
         WendeWerkzeugAn();
     }
@@ -957,13 +1147,26 @@ public partial class NoteEditor : UserControl
     void WendeWerkzeugAn()
     {
         var da = AktuelleAttribute();
-        var radiererGroesse = Math.Max(4, (DickeSlider?.Value ?? 2.2) * 3);
+        // Mindestens 8px, sonst sind versehentliche Mini-Punkte kaum zu treffen
+        var radiererGroesse = Math.Max(8, (DickeSlider?.Value ?? 2.2) * 3);
 
-        // EraserShape greift erst nach einem EditingMode-Wechsel (WPF-Eigenheit)
-        Flaeche.EditingMode = InkCanvasEditingMode.None;
-        Flaeche.EraserShape = new EllipseStylusShape(radiererGroesse, radiererGroesse);
-        Flaeche.DefaultDrawingAttributes = da.Clone();
-        Flaeche.EditingMode = AktuellerModus();
+        var ziel = AktuellerModus();
+        if (ziel == InkCanvasEditingMode.Select &&
+            Flaeche.EditingMode == InkCanvasEditingMode.Select)
+        {
+            // Lasso bleibt Lasso: der None-Umweg unten würde die aktive Auswahl
+            // verwerfen — genau das passiert sonst, sobald der Stift die
+            // Reichweite verlässt (StylusOutOfRange → WendeWerkzeugAn)
+            Flaeche.DefaultDrawingAttributes = da.Clone();
+        }
+        else
+        {
+            // EraserShape greift erst nach einem EditingMode-Wechsel (WPF-Eigenheit)
+            Flaeche.EditingMode = InkCanvasEditingMode.None;
+            Flaeche.EraserShape = new EllipseStylusShape(radiererGroesse, radiererGroesse);
+            Flaeche.DefaultDrawingAttributes = da.Clone();
+            Flaeche.EditingMode = ziel;
+        }
 
         // Form-Werkzeug: Fadenkreuz statt Pfeil
         Flaeche.UseCustomCursor = FormToggle?.IsChecked == true;
@@ -981,6 +1184,210 @@ public partial class NoteEditor : UserControl
 
     void Flaeche_SelectionChanged(object? sender, EventArgs e) =>
         UmwandelnButton.IsEnabled = Flaeche.GetSelectedStrokes().Count > 0;
+
+    // ---------- Zoom & Werkzeug-Kürzel ----------
+
+    readonly ScaleTransform _zoomTransform = new(1, 1);
+    double _zoom = 1;
+
+    void Scroller_MausRad(object sender, MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+        e.Handled = true;
+        SetzeZoom(_zoom * (e.Delta > 0 ? 1.1 : 1 / 1.1), e.GetPosition(Scroller));
+    }
+
+    /// <summary>Fläche zoomen; der Fixpunkt (Mauszeiger) bleibt an Ort und Stelle.</summary>
+    void SetzeZoom(double zoom, Point? fixpunkt = null)
+    {
+        zoom = Math.Clamp(zoom, 0.25, 4.0);
+        if (Math.Abs(zoom - _zoom) < 0.001) return;
+
+        var p = fixpunkt ?? new Point(Scroller.ViewportWidth / 2, Scroller.ViewportHeight / 2);
+        double inhaltX = (Scroller.HorizontalOffset + p.X) / _zoom;
+        double inhaltY = (Scroller.VerticalOffset + p.Y) / _zoom;
+
+        _zoom = zoom;
+        _zoomTransform.ScaleX = _zoomTransform.ScaleY = zoom;
+        Scroller.UpdateLayout(); // neue Ausmaße, sonst klemmen die Offsets gleich
+        Scroller.ScrollToHorizontalOffset(inhaltX * zoom - p.X);
+        Scroller.ScrollToVerticalOffset(inhaltY * zoom - p.Y);
+        PasseHoeheAn();
+    }
+
+    // ---- Pinch-Zoom (zwei Finger): Spreizen zoomt, gemeinsames Ziehen verschiebt.
+    // Sobald ein zweiter Finger aufsetzt, gehören alle Touch-Ereignisse der Geste —
+    // so entsteht beim Zoomen kein versehentlicher Strich auf der Fläche.
+
+    readonly Dictionary<int, Point> _touchPunkte = new(); // Position je Finger (relativ zum Scroller)
+    bool _pinchen;
+    double? _pinchAbstand;   // Fingerabstand beim Gestenstart
+    double _pinchStartZoom;
+    Point _pinchMitte;
+
+    void Pinch_TouchDown(object? sender, TouchEventArgs e)
+    {
+        _touchPunkte[e.TouchDevice.Id] = e.GetTouchPoint(Scroller).Position;
+        if (_touchPunkte.Count == 2)
+        {
+            _pinchen = true;
+            _pinchAbstand = null; // beim ersten Move vermessen
+            e.Handled = true;
+        }
+        else if (_pinchen)
+        {
+            e.Handled = true; // dritter Finger o.Ä. — bleibt bei der Geste
+        }
+    }
+
+    void Pinch_TouchMove(object? sender, TouchEventArgs e)
+    {
+        if (!_touchPunkte.ContainsKey(e.TouchDevice.Id)) return;
+        _touchPunkte[e.TouchDevice.Id] = e.GetTouchPoint(Scroller).Position;
+        if (!_pinchen) return;
+        e.Handled = true;
+        if (_touchPunkte.Count < 2) return;
+
+        var punkte = _touchPunkte.Values.Take(2).ToList();
+        double abstand = (punkte[0] - punkte[1]).Length;
+        var mitte = new Point((punkte[0].X + punkte[1].X) / 2,
+                              (punkte[0].Y + punkte[1].Y) / 2);
+
+        if (_pinchAbstand is null || _pinchAbstand < 1)
+        {
+            _pinchAbstand = abstand;
+            _pinchStartZoom = _zoom;
+            _pinchMitte = mitte;
+            return;
+        }
+
+        // Zoomen um die Fingermitte, dann dem Wandern der Mitte hinterherschieben
+        SetzeZoom(_pinchStartZoom * (abstand / _pinchAbstand.Value), mitte);
+        Scroller.ScrollToHorizontalOffset(
+            Scroller.HorizontalOffset + (_pinchMitte.X - mitte.X));
+        Scroller.ScrollToVerticalOffset(
+            Scroller.VerticalOffset + (_pinchMitte.Y - mitte.Y));
+        _pinchMitte = mitte;
+    }
+
+    void Pinch_TouchUp(object? sender, TouchEventArgs e)
+    {
+        _touchPunkte.Remove(e.TouchDevice.Id);
+        if (_pinchen)
+        {
+            e.Handled = true;
+            _pinchAbstand = null;
+            // Geste endet erst, wenn alle Finger oben sind — der letzte Finger
+            // soll beim Abheben keinen Strich mehr hinterlassen
+            if (_touchPunkte.Count == 0) _pinchen = false;
+        }
+    }
+
+    void Editor_KeyDown(object sender, KeyEventArgs e)
+    {
+        // Strg+0 setzt den Zoom zurück — auch mitten im Tippen erlaubt
+        if (e.Key is Key.D0 or Key.NumPad0 && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            SetzeZoom(1);
+            e.Handled = true;
+            return;
+        }
+
+        // Werkzeug-Buchstaben nie beim Tippen oder in Auswahllisten auslösen
+        if (Keyboard.Modifiers != ModifierKeys.None) return;
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase
+            or ComboBox or PasswordBox) return;
+        if (_note is null) return;
+
+        switch (e.Key)
+        {
+            case Key.A: AuswahlToggle.IsChecked = true; break;
+            case Key.S: StiftToggle.IsChecked = true; break;
+            case Key.M: MarkerToggle.IsChecked = true; break;
+            case Key.R: RadiererToggle.IsChecked = true; break;
+            case Key.P: PunktRadiererToggle.IsChecked = true; break;
+            case Key.L: LassoToggle.IsChecked = true; break;
+            case Key.F:
+                _formTyp ??= FormKatalog[0].Typ;
+                FormToggle.IsChecked = true;
+                WendeWerkzeugAn();
+                break;
+            default: return;
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>Nach Verschieben/Skalieren einer Auswahl: neue Lage/Größe der
+    /// Objekte in die VMs übernehmen. Die InkCanvas schreibt Left/Top/Width/Height
+    /// direkt ans Element und löst dabei unsere Bindungen — daher Werte übernehmen
+    /// und die Bindungen neu setzen.</summary>
+    void Selektion_Uebernehmen(object? sender, EventArgs e)
+    {
+        foreach (var el in Flaeche.GetSelectedElements())
+        {
+            if (el is not ContentControl { Content: ElementVm vm } host) continue;
+
+            double x = InkCanvas.GetLeft(host), y = InkCanvas.GetTop(host);
+            if (!double.IsNaN(x)) vm.X = x;
+            if (!double.IsNaN(y)) vm.Y = y;
+            host.SetBinding(InkCanvas.LeftProperty,
+                new System.Windows.Data.Binding(nameof(ElementVm.X)) { Source = vm });
+            host.SetBinding(InkCanvas.TopProperty,
+                new System.Windows.Data.Binding(nameof(ElementVm.Y)) { Source = vm });
+
+            if (!double.IsNaN(host.Width))
+            {
+                vm.Breite = host.Width;
+                double h = host.Height;
+                if (!double.IsNaN(h))
+                {
+                    switch (vm)
+                    {
+                        case BildElementVm b: b.Hoehe = h; break;
+                        case DateiElementVm d: d.Hoehe = h; break;
+                        case LinkElementVm l: l.Hoehe = h; break;
+                    }
+                }
+                // Feste Maße wieder freigeben — die Templates sollen über die
+                // VM-Bindungen (Breite/Hoehe) weiterarbeiten
+                host.ClearValue(WidthProperty);
+                host.ClearValue(HeightProperty);
+            }
+        }
+        PasseHoeheAn();
+        MeldeAenderung();
+    }
+
+    /// <summary>Entf löscht die aktuelle Auswahl — Objekte über unser Modell
+    /// (sonst entfernt die InkCanvas sie nur optisch und sie wären nach dem
+    /// nächsten Laden wieder da).</summary>
+    void Flaeche_Taste(object sender, KeyEventArgs e)
+    {
+        // Escape hebt die Auswahl auf (Big-Player-Standard)
+        if (e.Key == Key.Escape)
+        {
+            if (Flaeche.GetSelectedStrokes().Count > 0 ||
+                Flaeche.GetSelectedElements().Count > 0)
+            {
+                Flaeche.Select(new StrokeCollection());
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (e.Key != Key.Delete) return;
+        var elemente = Flaeche.GetSelectedElements().ToList();
+        var strokes = Flaeche.GetSelectedStrokes();
+        if (elemente.Count == 0 && strokes.Count == 0) return;
+
+        foreach (var el in elemente)
+        {
+            if (el is ContentControl { Content: ElementVm vm }) EntferneElement(vm);
+        }
+        if (strokes.Count > 0) _strokes.Remove(strokes);
+        MeldeAenderung();
+        e.Handled = true;
+    }
 
     /// <summary>Gedrückte Stift-Seitentaste schaltet bei aktivem Stift/Marker auf
     /// „ganze Striche radieren" um; Loslassen kehrt zum Zeichnen zurück.</summary>
@@ -1672,13 +2079,25 @@ public partial class NoteEditor : UserControl
     {
         if (FormToggle.IsChecked != true)
         {
-            // Abgewählt → zurück zum Auswahl-Werkzeug
-            BrecheFormAb();
-            AuswahlToggle.IsChecked = true;
+            // Klick aufs bereits aktive Form-Werkzeug wählt nicht ab, sondern
+            // öffnet das Formen-Menü — weg vom Werkzeug kommt man wie überall,
+            // indem man ein anderes wählt (Big-Player-Muster)
+            FormToggle.IsChecked = true;
+            ZeigeFormMenu();
             return;
         }
-        _formTyp ??= FormKatalog[0].Typ;
 
+        if (_formTyp is null)
+        {
+            // Erste Aktivierung: Form wählen lassen; danach merkt sich der
+            // Button die letzte Form und legt direkt los
+            _formTyp = FormKatalog[0].Typ;
+            ZeigeFormMenu();
+        }
+    }
+
+    void ZeigeFormMenu()
+    {
         var menu = new ContextMenu();
         foreach (var (typ, icon, name) in FormKatalog)
         {
@@ -1720,12 +2139,59 @@ public partial class NoteEditor : UserControl
 
     void Flaeche_MouseMove(object sender, MouseEventArgs e)
     {
+        if (_auswahlAktiv)
+        {
+            var p = Begrenze(e.GetPosition(Flaeche));
+            // Erst ab ein paar Pixeln Bewegung wird aus dem Klick ein Aufziehen
+            if (_auswahlRahmen is null &&
+                (Math.Abs(p.X - _auswahlStart.X) > 4 || Math.Abs(p.Y - _auswahlStart.Y) > 4))
+            {
+                _auswahlRahmen = new System.Windows.Shapes.Rectangle
+                {
+                    Stroke = new SolidColorBrush(Color.FromArgb(180, 90, 130, 200)),
+                    StrokeThickness = 1,
+                    StrokeDashArray = new DoubleCollection { 3, 2 },
+                    Fill = new SolidColorBrush(Color.FromArgb(28, 90, 130, 200)),
+                    IsHitTestVisible = false,
+                };
+                Flaeche.Children.Add(_auswahlRahmen);
+            }
+            if (_auswahlRahmen is not null)
+            {
+                var r = new Rect(_auswahlStart, p);
+                InkCanvas.SetLeft(_auswahlRahmen, r.X);
+                InkCanvas.SetTop(_auswahlRahmen, r.Y);
+                _auswahlRahmen.Width = r.Width;
+                _auswahlRahmen.Height = r.Height;
+            }
+            return;
+        }
+
         if (_formVorschau is null) return;
         _formVorschau.Data = FormGeometrie(_formTyp!, _formStart, Begrenze(e.GetPosition(Flaeche)));
     }
 
     void Flaeche_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_auswahlAktiv)
+        {
+            _auswahlAktiv = false;
+            Flaeche.ReleaseMouseCapture();
+            var p = Begrenze(e.GetPosition(Flaeche));
+            if (_auswahlRahmen is not null)
+            {
+                Flaeche.Children.Remove(_auswahlRahmen);
+                _auswahlRahmen = null;
+                WaehleImRechteck(new Rect(_auswahlStart, p));
+            }
+            else
+            {
+                KlickAufFreieFlaeche(p);
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (_formVorschau is null) return;
         var ende = Begrenze(e.GetPosition(Flaeche));
         BrecheFormAb();

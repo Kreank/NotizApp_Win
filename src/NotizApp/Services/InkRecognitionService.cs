@@ -14,11 +14,15 @@ namespace NotizApp.Services;
 public class InkRecognitionService
 {
     InkRecognizerContainer? _recognizer;
-    bool _defekt;
+
+    // Erst nach mehreren Fehlern in Folge aufgeben (fehlendes Sprachpaket o.Ä.);
+    // ein einzelner Ausrutscher darf die Erkennung nicht bis zum Neustart lahmlegen.
+    int _fehlerInFolge;
+    const int MaxFehlerInFolge = 3;
 
     public async Task<string?> ErkenneAsync(StrokeCollection strokes)
     {
-        if (_defekt || strokes.Count == 0) return null;
+        if (_fehlerInFolge >= MaxFehlerInFolge || strokes.Count == 0) return null;
         try
         {
             _recognizer ??= new InkRecognizerContainer();
@@ -44,13 +48,14 @@ public class InkRecognitionService
             var text = string.Join(' ',
                 ergebnisse.Select(r => r.GetTextCandidates().FirstOrDefault())
                           .Where(t => !string.IsNullOrWhiteSpace(t)));
+            _fehlerInFolge = 0;
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
-        catch
+        catch (Exception ex)
         {
-            // z.B. fehlendes Handschrift-Sprachpaket → Feature deaktivieren,
-            // nicht bei jedem Strich erneut scheitern
-            _defekt = true;
+            _fehlerInFolge++;
+            _recognizer = null; // beim nächsten Versuch frisch aufbauen
+            App.Protokolliere("Handschrift-Erkennung", ex);
             return null;
         }
     }

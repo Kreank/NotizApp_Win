@@ -130,7 +130,7 @@ public partial class App : Application
     }
 
     /// <summary>Fehler mit Zeitstempel und vollem Stack anhängen. Darf selbst nie werfen.</summary>
-    static void Protokolliere(string quelle, Exception? fehler)
+    public static void Protokolliere(string quelle, Exception? fehler)
     {
         if (fehler is null) return;
         try
